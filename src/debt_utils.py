@@ -7,6 +7,8 @@ import re
 from datetime import datetime
 from typing import List, Dict, Any, Tuple
 from collections import Counter
+from pathlib import Path
+
 
 def get_code_snippets(csv_file_path):
     """
@@ -19,17 +21,20 @@ def get_code_snippets(csv_file_path):
         List of code snippet strings in order
     """
     code_snippets = []
+    try:
+        with open(csv_file_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f, delimiter=';')
+            
+            if 'code_snippet' not in reader.fieldnames:
+                raise ValueError("Column 'code_snippet' not found in CSV file")
+            
+            for row in reader:
+                snippet = row.get('code_snippet', '').strip()
+                if snippet:
+                    code_snippets.append(snippet)
+    except Exception as e:
+        print(f"[Error] Failed to load code snippets from {csv_file_path}: {str(e)}")
     
-    with open(csv_file_path, 'r', encoding='utf-8') as f:
-        reader = csv.DictReader(f, delimiter=';')
-        
-        if 'code_snippet' not in reader.fieldnames:
-            raise ValueError("Column 'code_snippet' not found in CSV file")
-        
-        for row in reader:
-            snippet = row.get('code_snippet', '').strip()
-            if snippet:
-                code_snippets.append(snippet)
     
     return code_snippets
 
@@ -44,23 +49,25 @@ def get_td_ground_truth(csv_file_path):
         List of dictionaries with keys: 'smell', 'severity', 'code_snippet'
     """
     ground_truth = []
-    
-    with open(csv_file_path, 'r', encoding='utf-8') as f:
-        reader = csv.DictReader(f, delimiter=';')
-        
-        required_fields = ['smell', 'severity', 'code_snippet']
-        for field in required_fields:
-            if field not in reader.fieldnames:
-                raise ValueError(f"Column '{field}' not found in CSV file")
-        
-        for row in reader:
-            entry = {
-                'smell': row.get('smell', '').strip(),
-                'severity': row.get('severity', '').strip(),
-                'code_snippet': row.get('code_snippet', '').strip()
-            }
-            if entry['code_snippet']:  # Only include rows with code snippets
-                ground_truth.append(entry)
+    try:
+        with open(csv_file_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f, delimiter=';')
+            
+            required_fields = ['smell', 'severity', 'code_snippet']
+            for field in required_fields:
+                if field not in reader.fieldnames:
+                    raise ValueError(f"Column '{field}' not found in CSV file")
+            
+            for row in reader:
+                entry = {
+                    'smell': row.get('smell', '').strip(),
+                    'severity': row.get('severity', '').strip(),
+                    'code_snippet': row.get('code_snippet', '').strip()
+                }
+                if entry['code_snippet']:  # Only include rows with code snippets
+                    ground_truth.append(entry)
+    except Exception as e:
+        print(f"[Error] Failed to load ground truth from {csv_file_path}: {str(e)}")
     
     return ground_truth
 
@@ -201,14 +208,20 @@ def save_td_labels(predicted_labels: List[str], llm_config: Dict[str, Any], desi
     normalized_labels = [normalize_td_label(l) for l in predicted_labels]
 
     # --- Write raw outputs ---
-    with open(raw_filename, "w", encoding="utf-8") as f:
-        for l in predicted_labels:
-            f.write(str(l).strip() + "\n")
+    try:
+        with open(raw_filename, "w", encoding="utf-8") as f:
+            for l in predicted_labels:
+                f.write(str(l).strip() + "\n")
+    except Exception as e:
+        print(f"[Error] Failed to write raw TD labels to {raw_filename}: {str(e)}")
 
     # --- Write normalized labels ---
-    with open(normalized_filename, "w", encoding="utf-8") as f:
-        for l in normalized_labels:
-            f.write(str(l) + "\n")
+    try:
+        with open(normalized_filename, "w", encoding="utf-8") as f:
+            for l in normalized_labels:
+                f.write(str(l) + "\n")
+    except Exception as e:
+        print(f"[Error] Failed to write normalized TD labels to {normalized_filename}: {str(e)}")
 
     # --- Summary report ---
     label_counts = Counter(normalized_labels)
