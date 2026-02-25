@@ -28,12 +28,15 @@ LLM_MODEL_CLASS = "codestral:latest"
 LLM_MODEL_METHOD = "qwen2.5:7b-instruct" 
 TEMPERATURE = 0.0
 
+OLLAMA_BASE_URL = "http://localhost:11434/v1"  
+OLLAMA_API_KEY = "ollama"
+
 LLM_CONFIG = {
     "cache_seed": None,
     "config_list": [
         {
             "model": LLM_MODEL,
-            "api_base": "http://localhost:11434",
+            "api_base": "http://localhost:11434/v1",
             "api_type": LLM_SERVICE,
             "num_ctx": 262144,
         }
@@ -45,7 +48,7 @@ LLM_CONFIG = {
 LLM_CONFIG_OLLAMA = {
     "config_list": [
         {
-            "model": "qwen2.5-coder:7b",
+            "model": "qwen2.5-coder:7b-instruct",
             "base_url": "http://localhost:11434/v1",
             "api_key": "ollama",
         }
@@ -91,17 +94,17 @@ AGENT_CONFIGS = {
     },
     'class_detector': {
         'model': 'codestral:22b',
-        'base_url': 'http://localhost:11434',
-        'api_key': 'ollama',
+        'base_url': OLLAMA_BASE_URL,
+        'api_key': OLLAMA_API_KEY,
         'shot': 'few',
         'timeout': 300,
         'temperature': 0.1,
         'enabled': True,
     },
     'method_detector': {
-        'model': 'qwen2.5-coder:7b',
-        'base_url': 'http://localhost:11434',
-        'api_key': 'ollama',
+        'model': 'qwen2.5-coder:7b-instruct',
+        'base_url': OLLAMA_BASE_URL,
+        'api_key': OLLAMA_API_KEY,
         'shot': 'zero',
         'timeout': 300,
         'temperature': 0.1,
@@ -112,17 +115,17 @@ AGENT_CONFIGS = {
         'use_ast': True,  # Use AST parsing for precise localization
     },
     'explanation': {
-        'model': 'codestral:22b',
-        'base_url': 'http://localhost:11434',
-        'api_key': 'ollama',
+        'model': 'qwen2.5-coder:7b-instruct',
+        'base_url': OLLAMA_BASE_URL,
+        'api_key': OLLAMA_API_KEY,
         'temperature': 0.1,
         'max_tokens': 1000,
         'enabled': True,
     },
     'fix_suggestion': {
-        'model': 'codestral:22b',
-        'base_url': 'http://localhost:11434',
-        'api_key': 'ollama',
+        'model': 'qwen2.5-coder:7b-instruct',
+        'base_url': OLLAMA_BASE_URL,
+        'api_key': OLLAMA_API_KEY,
         'temperature': 0.1,
         'max_tokens': 2000,
         'enabled': False,  # Can be expensive, enable when needed
@@ -131,7 +134,7 @@ AGENT_CONFIGS = {
     'coordinator': {
         'parallel_detection': True,
         'conflict_resolution_strategy': 'prioritize_class',  # or 'keep_all', 'prioritize_method'
-        'min_confidence': 0.5,  # Filter results below this confidence
+        'min_confidence': 0.0,  # Filter results below this confidence
     }
 }
 

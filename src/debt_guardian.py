@@ -13,6 +13,11 @@ from pathlib import Path
 from program_slicer import ProgramSlicerAgent
 from coordinator import DebtDetectionCoordinator
 
+# Suppress warnings for cleaner output
+import warnings
+import logging
+warnings.filterwarnings('ignore', message='Field "model_client_cls"')
+logging.getLogger('autogen.oai.client').setLevel(logging.ERROR)
 
 class DebtGuardian:
     """

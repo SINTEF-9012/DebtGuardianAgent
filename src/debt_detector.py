@@ -37,11 +37,11 @@ class ClassDebtDetector:
         """
         self.config = agent_config
         self.model = agent_config.get('model', 'codestral:22b')
-        self.base_url = agent_config.get('base_url', 'http://localhost:11434')
+        self.base_url = agent_config.get('base_url', 'http://localhost:11434/v1')
         self.api_key = agent_config.get('api_key', 'ollama')
         self.shot_type = agent_config.get('shot', 'few')
         self.temperature = agent_config.get('temperature', 0.1)
-        #self.timeout = agent_config.get('timeout', 300)
+        self.timeout = agent_config.get('timeout', 300)
         
         # Build LLM config
         self.llm_config = {
@@ -86,7 +86,6 @@ class ClassDebtDetector:
         Returns:
             Detection result with label, confidence, and metadata
         """
-        import config
         
         code = class_info.get('code', '')
         class_name = class_info.get('name', 'Unknown')
@@ -99,11 +98,10 @@ class ClassDebtDetector:
         # Get agent and perform detection
         agent = self._get_agent()
         response = agent.generate_reply(messages=[{"content": message, "role": "user"}])
-        
-        if response and "content" in response:
-            raw_label = response["content"].strip()
-            label = self._normalize_label(raw_label)
-            
+        #print(f"Class-level Detector Agent response for class '{class_name}': {response}")
+        if response:
+            label = self._normalize_label(response)
+            #print(f"Normalized label for class '{class_name}': '{label}'")
             # Calculate confidence based on metrics
             confidence = self._calculate_confidence(label, metrics)
             
@@ -114,7 +112,7 @@ class ClassDebtDetector:
                 'debt_type': self._label_to_debt_type(label),
                 'confidence': confidence,
                 'metrics': metrics,
-                'raw_response': raw_label,
+                'raw_response': response,
                 'granularity': 'class'
             }
         else:
@@ -190,8 +188,8 @@ class MethodDebtDetector:
             agent_config: Configuration from config.AGENT_CONFIGS['method_detector']
         """
         self.config = agent_config
-        self.model = agent_config.get('model', 'qwen2.5-coder:7b')
-        self.base_url = agent_config.get('base_url', 'http://localhost:11434')
+        self.model = agent_config.get('model', 'qwen2.5-coder:7b-instruct')
+        self.base_url = agent_config.get('base_url', 'http://localhost:11434/v1')
         self.api_key = agent_config.get('api_key', 'ollama')
         self.shot_type = agent_config.get('shot', 'few')
         self.temperature = agent_config.get('temperature', 0.1)
@@ -253,10 +251,10 @@ class MethodDebtDetector:
         # Get agent and perform detection
         agent = self._get_agent()
         response = agent.generate_reply(messages=[{"content": message, "role": "user"}])
-        
-        if response and "content" in response:
-            raw_label = response["content"].strip()
-            label = self._normalize_label(raw_label)
+        #print(f"Method-level Detector Agent response for method '{method_name}': {response}")
+        if response:
+            label = self._normalize_label(response)
+            #print(f"Normalized label for method '{method_name}': '{label}'")
             
             # Calculate confidence
             confidence = self._calculate_confidence(label, metrics)
@@ -268,7 +266,7 @@ class MethodDebtDetector:
                 'debt_type': self._label_to_debt_type(label),
                 'confidence': confidence,
                 'metrics': metrics,
-                'raw_response': raw_label,
+                'raw_response': response,
                 'granularity': 'method'
             }
         else:
@@ -430,7 +428,7 @@ class ExplanationAgent:
         """
         self.config = agent_config
         self.model = agent_config.get('model', 'codestral:22b')
-        self.base_url = agent_config.get('base_url', 'http://localhost:11434')
+        self.base_url = agent_config.get('base_url', 'http://localhost:11434/v1')
         self.api_key = agent_config.get('api_key', 'ollama')
         self.temperature = agent_config.get('temperature', 0.1)
         self.max_tokens = agent_config.get('max_tokens', 1000)
@@ -498,10 +496,11 @@ class ExplanationAgent:
         
         agent = self._get_agent()
         response = agent.generate_reply(messages=[{"content": prompt, "role": "user"}])
-        
-        if response and "content" in response:
-            explanation = response["content"].strip()
-            debt_result['explanation'] = explanation
+        #print(f"Explanation Agent response for '{name}': {response}")
+        if response:
+            #explanation = response["content"].strip()
+            #print(f"Generated explanation for '{name}': {response}")
+            debt_result['explanation'] = response
         else:
             debt_result['explanation'] = "Could not generate explanation"
         
@@ -522,7 +521,7 @@ class FixSuggestionAgent:
         """
         self.config = agent_config
         self.model = agent_config.get('model', 'codestral:22b')
-        self.base_url = agent_config.get('base_url', 'http://localhost:11434')
+        self.base_url = agent_config.get('base_url', 'http://localhost:11434/v1')
         self.api_key = agent_config.get('api_key', 'ollama')
         self.temperature = agent_config.get('temperature', 0.1)
         self.max_tokens = agent_config.get('max_tokens', 2000)
@@ -591,10 +590,11 @@ class FixSuggestionAgent:
         
         agent = self._get_agent()
         response = agent.generate_reply(messages=[{"content": prompt, "role": "user"}])
-        
-        if response and "content" in response:
-            suggestion = response["content"].strip()
-            debt_result['fix_suggestion'] = suggestion
+        #print(f"Fix Suggestion Agent response for '{name}': {response}")
+        if response:
+            #suggestion = response["content"].strip()
+            #print(f"Generated fix suggestion for '{name}': {response}")
+            debt_result['fix_suggestion'] = response
         else:
             debt_result['fix_suggestion'] = "Could not generate fix suggestion"
         
