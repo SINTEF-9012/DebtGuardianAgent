@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 """
 Flask API Backend for DebtGuardianAgentic Web UI
-Provides REST API endpoints for the React frontend
-Supports multiple file types and folder uploads
+Provides endpoints for:
+- Uploading source code files and project folders
+- Managing analysis sessions
+- Configuring detection parameters
+- Running multi-agent technical debt analysis
+- Querying available LLM models
+- Returning structured JSON analysis results
 """
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
@@ -23,7 +28,7 @@ from debt_detector import ClassDebtDetector, MethodDebtDetector
 import config
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for React frontend
+CORS(app)  # Enable CORS for browser-based clients
 
 # Configuration
 UPLOAD_FOLDER = tempfile.mkdtemp()
