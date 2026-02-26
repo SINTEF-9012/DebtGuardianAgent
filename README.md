@@ -1,157 +1,145 @@
 # 🧠 DebtGuardianAgent
 > An LLM-powered multi-agent system for detecting Technical Debt in real-world software repositories.
 
----
+**Multi-Agent Technical Debt Detection System**
 
-## 📌 Overview
+DebtGuardianAgent is an advanced, AI-powered source code analysis tool that uses a multi-agent architecture to detect and explain technical debt (code smells) in source code repositories. It leverages specialized LLM agents for different granularities of analysis, providing comprehensive insights into code quality issues.
 
-Technical Debt often accumulates silently in software systems, impacting maintainability, scalability, and development speed.  
-This project introduces a multi-agent architecture that applies modern LLMs to detect, explain, and propose fixes for Technical Debt (TD) in codebases.
+### Multi-Agent Architecture
+- **Source Code Loader**: Tracks and loads source files from repositories
+- **Program Slicer**: Extracts classes and methods with structural metrics
+- **Class-Level Detector**: Identifies Blob and Data Class smells (optimized with Codestral)
+- **Method-Level Detector**: Detects Feature Envy and Long Method smells (optimized with Qwen2.5-Coder)
+- **Localization Agent**: Pinpoints exact line numbers of detected issues
+- **Explanation Agent**: Provides human-readable explanations of why code is problematic
+- **Fix Suggestion Agent**: Offers concrete refactoring recommendations
 
-The system is suitable for:
-- Code review automation
-- Continuous integration & quality gates
-- Educational tooling
-- Software maintenance research
+### Supported Code Smells
+1. **Blob (God Class)** - Classes with too many responsibilities
+2. **Data Class** - Classes with only getters/setters, no behavior
+3. **Feature Envy** - Methods heavily dependent on another class
+4. **Long Method** - Excessively long or complex methods
 
----
+### Supported Languages
+- ✅ Java (fully supported)
+- 🔧 C# (slicer in progress)
+- 🔧 Python (planned)
+- 🔧 C++ (planned)
 
-## 🎯 Key Features
+## 📁 Project Structure
 
-✔ Upload files or entire repos  
-✔ Language-aware code slicing (Java supported first)  
-✔ Class-level & method-level TD detection  
-✔ Line-level smell localization  
-✔ Human-readable explanations  
-✔ Optional refactoring suggestions  
-✔ Structured JSON output for integrations  
-
----
-
-## 🏗 Multi-Agent System Architecture
-
-Our system operates through cooperating specialized agents:
-
----
-
-### **1. Source Code Loader**
-- Loads source files or folders
-- Detects programming language (Java/Python/C#/C++/JS/…)
-- _Future:_ Tracks modified files across commits
-- Forwards raw code to `ProgramSlicer`
-
----
-
-### **2. Program Slicer**
-- Splits code into smaller semantic slices:
-  - Classes
-  - Methods
-- Uses language-aware slicing (**currently Java only**)
-- Produces minimal slices to reduce LLM noise
-
----
-
-### **3. Coordinator Agent**
-Acts as the “brain” of the pipeline:
-
-- Routes class slices → `Class Debt Detector`
-- Routes method slices → `Method Debt Detector`
-- Applies decision logic:
-  - If no debt → skip
-  - If debt → trigger explanation & fix suggestions
-
----
-
-### **4. Class Debt Detector**  
-
-Detects class-level smells:
-- Blob Class
-- Data Class
-
-**Why a separate model?**
-- Class-level abstraction benefits from larger context
-- Reduces interference from method noise
-
----
-
-### **5. Method Debt Detector**  
-
-Detects method-level smells:
-- Long Method
-- Feature Envy
-- Excessive Nesting
-- Complex Branching
-
-**Why slicing matters:**
-- Only analyzes one function at a time
-- Reduces model overwhelm
-- Improves detection precision
-
----
-
-### **6. Result Aggregator**
-- Merges class-level + method-level detections
-- Outputs unified structured results
-
----
-
-### **7. Localization Agent**
-Adds contextual metadata:
-- File path
-- Slice index
-- Start/end line numbers
-
----
-
-### **8. Explanation Agent**
-Generates human-friendly details:
-- Why it is considered debt
-- Symptoms detected
-- Potential consequences
-
-Useful for:
-- Code review
-- Developer onboarding
-- Educational tooling
-
----
-
-### **9. Fix Suggestion Agent**
-Produces improvement proposals:
-- Light refactor suggestions
-- Optional code rewrites
-- Optional before/after diff-like output
-
----
-
-## 🖥 Frontend Capabilities
-
-Frontend supports:
-- File or folder uploads
-- Drag-and-drop UI
-- Multi-language inputs (Java/C#/C++/Python/JS)
-
-Configuration options:
-- Class-level detection **on/off**
-- Method-level detection **on/off**
-- Slicing **on/off**
-- Explanation **on/off**
-- Fix suggestion **on/off**
-- Minimum confidence threshold
-
----
-
-## 📊 Output Example (JSON Structure)
-
-```json
-[
-  {
-    "file": "src/Foo.java",
-    "type": "BlobClass",
-    "lines": [12, 210],
-    "explanation": "...",
-    "suggestion": "Extract related functionality into cohesive classes."
-  }
-]
 ```
----
+DebtGuardianAgent/
+├── data/                      # Input datasets
+├── samples/                   # Sample files with code smells
+│   ├── BlobExample.java
+│   ├── LongMethodFeatureEnvy.java
+│   └── DataClassExample.java
+├── src/                   
+│   ├── debt_detector.py           # Core detection agents
+│   ├──coordinator.py             # Multi-agent workflow orchestrator
+│   ├── debt_guardian.py           # Main pipeline
+│   ├── program_slicer.py          # Java code slicer with metrics
+│   ├── app.py                     # Flask REST API backend
+│   ├── index.html                 # Web UI (standalone)
+│   ├── config.py                  # Configuration and prompts
+│   ├── agent_utils.py             # Generic agent utilities
+│   ├── debt_utils.py              # Dataset utilities
+│   ├── evaluation.py              # Evaluation metrics
+├── results/                   # Analysis results
+└── README.md                  # This file
+```
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+1. **Python 3.12+**
+2. **Ollama** (for local LLM inference)
+3. **Required Models**:
+   - `codestral:22b` (for class-level detection & explanations)
+   - `qwen2.5-coder:7b-instruct` (for method-level detection)
+
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/DebtGuardianAgent.git
+cd DebtGuardianAgent
+
+# Install Python dependencies
+pip install -r requirements.txt
+
+# Start Ollama server
+ollama serve
+
+# Pull required models
+ollama pull codestral:22b
+ollama pull qwen2.5-coder:7b-instruct
+```
+
+### Quick Start
+
+#### 1. Analyze a Single File (CLI)
+
+```bash
+python debt_guardian.py samples/BlobExample.java --type file --format report
+```
+
+#### 2. Analyze a Directory
+
+```bash
+python debt_guardian.py samples/ --type dir --recursive --output results/analysis.json
+```
+
+#### 3. Analyze a Repository
+
+```bash
+python debt_guardian.py /path/to/repo --type repo --language java --output results/repo_analysis.json
+```
+
+#### 4. Web Interface
+
+```bash
+# Start the Flask API server
+python app.py
+
+# Open index.html in your browser
+# or navigate to http://localhost:5000
+```
+
+## 🔧 Configuration
+
+Edit `config.py` to customize:
+
+### Agent Configuration
+
+```python
+AGENT_CONFIGS = {
+    'class_detector': {
+        'enabled': True,
+        'model': 'codestral:22b',
+        'shot': 'few',  # 'zero' or 'few'
+        'temperature': 0.1,
+    },
+    'method_detector': {
+        'enabled': True,
+        'model': 'qwen2.5-coder:7b-instruct',
+        'shot': 'zero',
+        'temperature': 0.1,
+    },
+    'localization': {
+        'enabled': True,
+        'use_ast': True,
+    },
+    'explanation': {
+        'enabled': True,
+        'model': 'qwen2.5-coder:7b-instruct',
+    },
+    'fix_suggestion': {
+        'enabled': False,  
+        'validate_fixes': False,
+    },
+}
+```
