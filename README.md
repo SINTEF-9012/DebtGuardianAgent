@@ -37,7 +37,7 @@ DebtGuardianAgent/
 │   └── DataClassExample.java
 ├── src/                   
 │   ├── debt_detector.py           # Core detection agents
-│   ├──coordinator.py             # Multi-agent workflow orchestrator
+│   ├── coordinator.py             # Multi-agent workflow orchestrator
 │   ├── debt_guardian.py           # Main pipeline
 │   ├── program_slicer.py          # Java code slicer with metrics
 │   ├── app.py                     # Flask REST API backend
