@@ -20,6 +20,15 @@ def ask_ollama(model, prompt, temperature=0):
         return None
     return response.get('response', None)
 
+def is_ollama_running() -> bool:
+    """Check if the Ollama server is currently running and reachable."""
+    try:
+        client = ollama.Client()
+        client.list()  # lightweight API call, returns installed models
+        return True
+    except Exception:
+        return False
+    
 def _start_ollama_server_base(
     stream_stdout: bool = False,
     log_file: Optional[str] = None
