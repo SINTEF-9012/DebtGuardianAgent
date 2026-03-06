@@ -12,7 +12,7 @@ from typing import Dict, Any, List, Optional
 from pathlib import Path
 from program_slicer import ProgramSlicerAgent
 from coordinator import DebtDetectionCoordinator
-
+from ollama_utils import start_ollama_server, is_ollama_running, start_ollama_server_log, stop_ollama_server
 # Suppress warnings for cleaner output
 import warnings
 import logging
@@ -355,6 +355,15 @@ def main():
     
     args = parser.parse_args()
     
+    # Start ollama server if not running
+    proc = None
+    if not is_ollama_running():
+        print("[Ollama] Starting Ollama server...")
+        proc = start_ollama_server_log()
+        time.sleep(5)  # Wait for server to start
+    else:
+        print("[Ollama] Ollama server is already running")
+
     # Initialize DebtGuardian
     guardian = DebtGuardian()
     
@@ -377,7 +386,10 @@ def main():
             print(json.dumps(results, indent=2))
         else:
             print(results)
-
+    
+    # Only stop the server if we started it
+    if proc is not None:
+        stop_ollama_server(proc)
 
 if __name__ == '__main__':
     main()
