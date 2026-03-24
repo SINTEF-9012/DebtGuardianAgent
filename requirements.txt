@@ -1,3 +1,4 @@
+source-parser==1.2.0
 ag2==0.10.0
 aiohappyeyeballs==2.4.3
 aiohttp==3.10.10

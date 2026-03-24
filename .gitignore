@@ -1,28 +1,29 @@
-config/config.ini
-conda_envs/
-
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
+*.egg-info/
+.venv/
+venv/
+*.egg
 
+# Environment
+.env
+*.env
 
-# Distribution / packaging
-.Python
-env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-.cache/
-logs/
-tests/
-results/
+# Temp / upload dirs
+/work/
+/results/
+/repositories/
+/logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
 .DS_Store
-output/
-plots/
+Thumbs.db
 
-
+# Data (large files)
+/data/*.csv

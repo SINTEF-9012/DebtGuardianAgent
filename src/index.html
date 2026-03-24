@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DebtGuardianAgentic - Technical Debt Detection</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         .spinner {
             border: 3px solid rgba(255, 255, 255, 0.3);
@@ -18,6 +19,47 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        /* Markdown rendered content */
+        .md-content p { margin-bottom: 0.5rem; }
+        .md-content ul { list-style: disc; padding-left: 1.25rem; margin-bottom: 0.5rem; }
+        .md-content ol { list-style: decimal; padding-left: 1.25rem; margin-bottom: 0.5rem; }
+        .md-content li { margin-bottom: 0.2rem; }
+        .md-content strong { font-weight: 600; }
+        .md-content em { font-style: italic; }
+        .md-content code {
+            background: rgba(0,0,0,0.08);
+            padding: 0.1rem 0.3rem;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 0.85em;
+        }
+        .md-content pre {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 0.75rem;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin-bottom: 0.5rem;
+            font-size: 0.8rem;
+        }
+        .md-content pre code {
+            background: none;
+            padding: 0;
+            color: inherit;
+        }
+        .md-content h1, .md-content h2, .md-content h3 {
+            font-weight: 600;
+            margin-bottom: 0.4rem;
+            margin-top: 0.6rem;
+        }
+        .md-content blockquote {
+            border-left: 3px solid #94a3b8;
+            padding-left: 0.75rem;
+            color: #64748b;
+            margin-bottom: 0.5rem;
+        }
+        .md-content a { color: #2563eb; text-decoration: underline; }
+        .md-content hr { border-color: #e2e8f0; margin: 0.5rem 0; }
     </style>
 </head> 
 <body class="bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen">
@@ -39,7 +81,9 @@
                         </div>
                     </div>
 
-                    <!-- Configuration Panel Toggle Button -->
+                    <!-- API Status + Config Toggle -->
+                    <div class="flex items-center space-x-3">
+                        <div id="apiStatus" class="text-xs text-slate-400">Checking API...</div>
                     <button onclick="toggleConfig()" class="flex items-center space-x-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
@@ -47,6 +91,7 @@
                         </svg>
                         <span class="text-sm font-medium">Configuration</span>
                     </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -194,10 +239,20 @@
     </div>
 
     <script>
+        // Configure marked for safe rendering
+        marked.setOptions({ breaks: true, gfm: true });
+
+        /** Render a markdown string to safe HTML, returns empty string if falsy */
+        function renderMd(text) {
+            if (!text) return '';
+            return marked.parse(String(text));
+        }
+
         const API_URL = 'http://localhost:5000/api';
         let selectedFiles = [];
         let sessionId = null;
         let uploadMode = 'files'; // 'files' or 'folder'
+        let lastAnalysisData = null; // stores last results for export
 
         // Supported file extensions
         const SUPPORTED_EXTENSIONS = ['.java', '.cpp', '.cs', '.py', '.js'];
@@ -435,52 +490,83 @@
         }
 
         function displayResults(data) {
+            lastAnalysisData = data; // store for export
             const enableExplanations = document.getElementById('enableExplanations').checked;
             const enableFixes = document.getElementById('enableFixes').checked;
-            
+
             const severityColor = {
-                'high': 'text-red-600 bg-red-50 border-red-200',
+                'high':   'text-red-600 bg-red-50 border-red-200',
                 'medium': 'text-yellow-600 bg-yellow-50 border-yellow-200',
-                'low': 'text-blue-600 bg-blue-50 border-blue-200'
+                'low':    'text-blue-600 bg-blue-50 border-blue-200',
+                'none':   'text-slate-600 bg-slate-50 border-slate-200'
             };
+
+            const granularityBadge = {
+                'class':  'bg-purple-100 text-purple-700',
+                'method': 'bg-indigo-100 text-indigo-700'
+            };
+
+            // Build by_category breakdown HTML
+            const byCategory = data.summary.by_category || {};
+            const byCategoryHTML = Object.keys(byCategory).length > 0
+                ? Object.entries(byCategory).map(([name, count]) =>
+                    `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">
+                        ${name}: <strong class="ml-1">${count}</strong>
+                    </span>`).join('')
+                : '<span class="text-xs text-slate-400">None</span>';
+
+            // Build by_language breakdown HTML
+            const byLang = data.summary.by_language || {};
+            const byLangHTML = Object.keys(byLang).length > 0
+                ? Object.entries(byLang).map(([lang, count]) =>
+                    `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-700">
+                        ${lang}: <strong class="ml-1">${count}</strong>
+                    </span>`).join('')
+                : '<span class="text-xs text-slate-400">—</span>';
+
+            const byGran = data.summary.by_granularity || {};
 
             const resultsPanel = document.getElementById('resultsPanel');
             resultsPanel.innerHTML = `
                 <div class="space-y-6">
                     <!-- Summary Cards -->
-                    <div class="grid grid-cols-3 gap-4">
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
                         <div class="bg-white rounded-xl shadow-lg p-4 border border-slate-200">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <p class="text-sm text-slate-500">Total Issues</p>
-                                    <p class="text-2xl font-bold text-slate-800">${data.summary.total_issues}</p>
-                                </div>
-                                <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                </svg>
-                            </div>
+                            <p class="text-xs text-slate-500 mb-1">Total Issues</p>
+                            <p class="text-2xl font-bold text-slate-800">${data.summary.total_issues}</p>
                         </div>
                         <div class="bg-white rounded-xl shadow-lg p-4 border border-slate-200">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <p class="text-sm text-slate-500">High Severity</p>
-                                    <p class="text-2xl font-bold text-red-600">${data.summary.by_severity.high || 0}</p>
-                                </div>
-                                <svg class="w-8 h-8 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                                </svg>
-                            </div>
+                            <p class="text-xs text-slate-500 mb-1">High Severity</p>
+                            <p class="text-2xl font-bold text-red-600">${data.summary.by_severity.high || 0}</p>
                         </div>
                         <div class="bg-white rounded-xl shadow-lg p-4 border border-slate-200">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <p class="text-sm text-slate-500">Medium Severity</p>
-                                    <p class="text-2xl font-bold text-yellow-600">${data.summary.by_severity.medium || 0}</p>
-                                </div>
-                                <svg class="w-8 h-8 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                </svg>
-                            </div>
+                            <p class="text-xs text-slate-500 mb-1">Medium Severity</p>
+                            <p class="text-2xl font-bold text-yellow-600">${data.summary.by_severity.medium || 0}</p>
+                        </div>
+                        <div class="bg-white rounded-xl shadow-lg p-4 border border-slate-200">
+                            <p class="text-xs text-slate-500 mb-1">Files Analyzed</p>
+                            <p class="text-2xl font-bold text-slate-700">${data.summary.files_analyzed || 0}</p>
+                        </div>
+                    </div>
+
+                    <!-- Breakdown row -->
+                    <div class="bg-white rounded-xl shadow-lg p-4 border border-slate-200 space-y-2">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="text-xs font-medium text-slate-500 w-24">By type:</span>
+                            ${byCategoryHTML}
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="text-xs font-medium text-slate-500 w-24">By granularity:</span>
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-purple-100 text-purple-700">
+                                Class: <strong class="ml-1">${byGran.class || 0}</strong>
+                            </span>
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-indigo-100 text-indigo-700">
+                                Method: <strong class="ml-1">${byGran.method || 0}</strong>
+                            </span>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="text-xs font-medium text-slate-500 w-24">By language:</span>
+                            ${byLangHTML}
                         </div>
                     </div>
 
@@ -508,12 +594,18 @@
                                 <div class="p-5">
                                     <div class="flex items-start justify-between mb-3">
                                         <div class="flex-1">
-                                            <div class="flex items-center space-x-2 mb-1 flex-wrap">
+                                            <div class="flex items-center space-x-2 mb-1 flex-wrap gap-1">
                                                 <span class="px-2 py-1 rounded text-xs font-medium border ${severityColor[issue.severity] || severityColor.low}">
                                                     ${issue.debt_type}
                                                 </span>
                                                 <span class="px-2 py-1 rounded text-xs font-medium bg-slate-100 text-slate-600">
-                                                    ${issue.severity}
+                                                    ${issue.severity || 'unknown'}
+                                                </span>
+                                                <span class="px-2 py-1 rounded text-xs font-medium ${granularityBadge[issue.granularity] || 'bg-slate-100 text-slate-600'}">
+                                                    ${issue.granularity || ''}
+                                                </span>
+                                                <span class="text-xs text-slate-500">
+                                                    ${issue.language ? `[${issue.language}]` : ''}
                                                 </span>
                                                 <span class="text-xs text-slate-500">
                                                     Confidence: ${(issue.confidence * 100).toFixed(0)}%
@@ -521,23 +613,30 @@
                                             </div>
                                             <h3 class="text-base font-semibold text-slate-800">${issue.code_name}</h3>
                                             <p class="text-sm text-slate-500 mt-1">
-                                                ${issue.file_path}${issue.start_line ? ` (Lines ${issue.start_line}-${issue.end_line})` : ''}
+                                                ${issue.file_path}${issue.start_line ? ` (Lines ${issue.start_line}–${issue.end_line})` : ''}
                                             </p>
                                         </div>
                                     </div>
 
                                     ${enableExplanations && issue.explanation ? `
                                         <div class="bg-blue-50 border border-blue-100 rounded-lg p-3 mb-3">
-                                            <p class="text-xs font-medium text-blue-800 mb-1">Why this is technical debt:</p>
-                                            <p class="text-sm text-slate-700">${issue.explanation}</p>
+                                            <p class="text-xs font-medium text-blue-800 mb-2">Why this is technical debt:</p>
+                                            <div class="text-sm text-slate-700 md-content">${renderMd(issue.explanation)}</div>
                                         </div>
                                     ` : ''}
 
                                     ${enableFixes && issue.fix_suggestion ? `
-                                        <div class="bg-green-50 border border-green-100 rounded-lg p-3">
-                                            <p class="text-xs font-medium text-green-800 mb-1">Suggested fix:</p>
-                                            <p class="text-sm text-slate-700">${issue.fix_suggestion}</p>
+                                        <div class="bg-green-50 border border-green-100 rounded-lg p-3 mb-3">
+                                            <p class="text-xs font-medium text-green-800 mb-2">Suggested fix:</p>
+                                            <div class="text-sm text-slate-700 md-content">${renderMd(issue.fix_suggestion)}</div>
                                         </div>
+                                    ` : ''}
+
+                                    ${issue.code_snippet ? `
+                                        <details class="mt-2">
+                                            <summary class="text-xs text-slate-500 cursor-pointer hover:text-slate-700">Show code snippet</summary>
+                                            <div class="mt-2 md-content">${renderMd('\`\`\`\n' + issue.code_snippet + '\n\`\`\`')}</div>
+                                        </details>
                                     ` : ''}
                                 </div>
                             </div>
@@ -548,8 +647,19 @@
         }
 
         function exportResults() {
-            // In a real implementation, this would fetch results from the server
-            alert('Export functionality will download results as JSON');
+            if (!lastAnalysisData) {
+                alert('No analysis results to export yet.');
+                return;
+            }
+            const blob = new Blob([JSON.stringify(lastAnalysisData, null, 2)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `debt_analysis_${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         }
 
         // Show initial empty state
@@ -563,6 +673,27 @@
                 <p class="text-xs text-slate-400 mt-1">Supported: Java, C++, C#, Python, JavaScript</p>
             </div>
         `;
+
+        // Check API health on page load
+        async function checkApiHealth() {
+            const indicator = document.getElementById('apiStatus');
+            try {
+                const res = await fetch(`${API_URL}/health`);
+                const data = await res.json();
+                if (data.status === 'healthy') {
+                    indicator.innerHTML = `<span class="inline-flex items-center space-x-1 text-xs text-green-600">
+                        <span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span>
+                        <span>API connected</span></span>`;
+                } else {
+                    throw new Error('not healthy');
+                }
+            } catch {
+                indicator.innerHTML = `<span class="inline-flex items-center space-x-1 text-xs text-red-600">
+                    <span class="w-2 h-2 rounded-full bg-red-500 inline-block"></span>
+                    <span>API offline — start the Flask server</span></span>`;
+            }
+        }
+        checkApiHealth();
 
         // Sample data for each category
         const smells = {

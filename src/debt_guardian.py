@@ -112,31 +112,37 @@ class DebtGuardian:
         else:
             return results
     
-    def analyze_directory(self, directory: str, 
-                          file_extension: str = '.java',
+    def analyze_directory(self, directory: str,
+                          file_extension: Optional[str] = None,
                           recursive: bool = True) -> Dict[str, Any]:
         """
         Analyze all files in a directory.
-        
+
         Args:
             directory: Directory path
-            file_extension: File extension to match
+            file_extension: File extension to match (e.g. '.cs'). If None,
+                            all supported extensions are included.
             recursive: Whether to search recursively
-            
+
         Returns:
             Aggregated results for all files
         """
+        SUPPORTED_EXTENSIONS = {'.java', '.cs', '.py', '.js', '.ts', '.cpp', '.cc', '.cxx', '.c'}
+
         dir_path = Path(directory)
-        
-        # Find files
-        if recursive:
-            pattern = f'**/*{file_extension}'
+
+        if file_extension:
+            exts = {file_extension}
         else:
-            pattern = f'*{file_extension}'
-        
-        files = list(dir_path.glob(pattern))
-        
-        print(f"\n[DebtGuardian] Found {len(files)} {file_extension} files in {directory}")
+            exts = SUPPORTED_EXTENSIONS
+
+        prefix = '**/*' if recursive else '*'
+        files = []
+        for ext in sorted(exts):
+            files.extend(dir_path.glob(f'{prefix}{ext}'))
+
+        ext_label = file_extension if file_extension else 'supported'
+        print(f"\n[DebtGuardian] Found {len(files)} {ext_label} files in {directory}")
         
         results = {
             'directory': str(directory),
@@ -175,30 +181,35 @@ class DebtGuardian:
         
         return results
     
-    def analyze_repository(self, repo_path: str, 
-                          language: str = 'java') -> Dict[str, Any]:
+    def analyze_repository(self, repo_path: str,
+                          language: str = 'all') -> Dict[str, Any]:
         """
         Analyze a source code repository.
-        
+
         Args:
             repo_path: Path to repository
-            language: Programming language ('java', 'python', etc.)
-            
+            language: Programming language ('java', 'python', 'csharp', 'javascript',
+                      'typescript', 'cpp', 'c') or 'all' for every supported type.
+
         Returns:
             Repository analysis results
         """
-        # Determine file patterns based on language
         extension_map = {
-            'java': '**/*.java',
-            'python': '**/*.py',
-            'javascript': '**/*.js',
-            'csharp': '**/*.cs',
-            'cpp': '**/*.cpp'
+            'java':       ['**/*.java'],
+            'python':     ['**/*.py'],
+            'javascript': ['**/*.js'],
+            'typescript': ['**/*.ts'],
+            'csharp':     ['**/*.cs'],
+            'cs':         ['**/*.cs'],
+            'cpp':        ['**/*.cpp', '**/*.cc', '**/*.cxx'],
+            'c':          ['**/*.c'],
+            'all':        ['**/*.java', '**/*.cs', '**/*.py', '**/*.js',
+                           '**/*.ts', '**/*.cpp', '**/*.cc', '**/*.cxx', '**/*.c'],
         }
-        
-        pattern = extension_map.get(language, '**/*.java')
-        
-        return self.coordinator.analyze_repository(repo_path, [pattern])
+
+        patterns = extension_map.get(language.lower(), extension_map['all'])
+
+        return self.coordinator.analyze_repository(repo_path, patterns)
     
     def _aggregate_results(self, file_results: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Aggregate results"""
@@ -345,8 +356,8 @@ def main():
     parser.add_argument('path', help='File or directory to analyze')
     parser.add_argument('--type', choices=['file', 'dir', 'repo'], default='file',
                        help='Type of analysis')
-    parser.add_argument('--language', default='java',
-                       help='Programming language (for repo analysis)')
+    parser.add_argument('--language', default='all',
+                       help='Language filter: java, python, csharp, javascript, typescript, cpp, c, or all (default: all)')
     parser.add_argument('--output', help='Output file path')
     parser.add_argument('--format', choices=['json', 'report'], default='json',
                        help='Output format')
@@ -371,7 +382,12 @@ def main():
     if args.type == 'file':
         results = guardian.analyze_file(args.path, output_format=args.format)
     elif args.type == 'dir':
-        results = guardian.analyze_directory(args.path, recursive=args.recursive)
+        lang_ext_map = {
+            'java': '.java', 'python': '.py', 'csharp': '.cs', 'cs': '.cs',
+            'javascript': '.js', 'typescript': '.ts', 'cpp': '.cpp', 'c': '.c',
+        }
+        ext = lang_ext_map.get(args.language.lower()) if args.language else None
+        results = guardian.analyze_directory(args.path, file_extension=ext, recursive=args.recursive)
     elif args.type == 'repo':
         results = guardian.analyze_repository(args.path, language=args.language)
     else:

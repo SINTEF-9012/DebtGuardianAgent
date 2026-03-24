@@ -27,7 +27,9 @@ from program_slicer import ProgramSlicerAgent
 from debt_detector import ClassDebtDetector, MethodDebtDetector
 import config
 
-app = Flask(__name__)
+SRC_DIR = os.path.dirname(os.path.abspath(__file__))
+
+app = Flask(__name__, static_folder=SRC_DIR, static_url_path='/static')
 CORS(app)  # Enable CORS for browser-based clients
 
 # Configuration
@@ -55,6 +57,23 @@ def get_file_language(filename):
         'js': 'JavaScript'
     }
     return language_map.get(ext, 'Unknown')
+
+
+@app.route('/', methods=['GET'])
+def root():
+    """Serve the main UI"""
+    return send_file(os.path.join(SRC_DIR, 'index.html'))
+
+
+@app.route('/logo_DebtGuardianAI.png', methods=['GET'])
+def serve_logo():
+    """Serve logo asset"""
+    return send_file(os.path.join(SRC_DIR, 'logo_DebtGuardianAI.png'))
+
+
+@app.route('/favicon.ico', methods=['GET'])
+def favicon():
+    return jsonify({}), 204
 
 
 @app.route('/api/health', methods=['GET'])
@@ -402,27 +421,32 @@ def analyze_single_file():
             
             # Detect based on granularity
             results = []
-            
+
+            _category_map = {'No Smell': 0, 'Blob': 1, 'Data Class': 2, 'Feature Envy': 3, 'Long Method': 4}
+
             if granularity == 'class' and slices.get('classes'):
-                detector = ClassDebtDetector(shot_type='few')
+                class_cfg = {**config.AGENT_CONFIGS['class_detector'], 'shot': 'few'}
+                detector = ClassDebtDetector(class_cfg)
                 for cls in slices['classes']:
                     result = detector.detect(cls)
                     results.append(result)
-            
+
             elif granularity == 'method' and slices.get('methods'):
-                detector = MethodDebtDetector(shot_type='zero')
+                method_cfg = {**config.AGENT_CONFIGS['method_detector'], 'shot': 'zero'}
+                detector = MethodDebtDetector(method_cfg)
                 for method in slices['methods']:
                     result = detector.detect(method)
                     results.append(result)
-            
+
             # Format response
             response_issues = []
             for result in results:
-                cat = result.get('detected_category_int', -1)
+                debt_type_str = result.get('debt_type') or ''
+                cat = _category_map.get(debt_type_str, -1)
                 if cat > 0:
                     debt_info = config.TD_CATEGORIES.get(cat, {})
                     response_issues.append({
-                        'code_name': result.get('code_name', 'unknown'),
+                        'code_name': result.get('name', 'unknown'),
                         'debt_type': debt_info.get('name', 'Unknown'),
                         'severity': debt_info.get('severity', 'unknown'),
                         'confidence': result.get('confidence', 0.0),
