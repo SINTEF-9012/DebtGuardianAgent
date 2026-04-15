@@ -138,7 +138,7 @@ def get_unique_smells(csv_file_path):
 def normalize_td_label(text: str) -> str:
     """
     Normalize a raw TD label output (from generator, critic, or refiner).
-    Keeps only the digit (0–4); if not found, returns '0' (default: No smell).
+    Keeps only the digit (0–9); if not found, returns '0' (default: No smell).
     """
     if text is None:
         return "0"
@@ -149,10 +149,10 @@ def normalize_td_label(text: str) -> str:
     text = re.sub(r"^```[a-z]*|```$", "", text)
     text = re.sub(r"You are a helpful assistant\.?", "", text, flags=re.IGNORECASE)
     text = re.sub(r"(?i)(APPROVED|REJECTED)\|(\d)\|?.*", r"\2", text)  # handle critic-style outputs
-    text = re.sub(r"[^0-4]", "", text)  # keep only digits 0–4
+    text = re.sub(r"[^0-9]", "", text)  # keep only digits 0–9
 
     # Take the first valid label found
-    match = re.search(r"[0-4]", text)
+    match = re.search(r"[0-9]", text)
     return match.group(0) if match else "0"
 
 
@@ -161,7 +161,12 @@ TD_LABELS = {
     "1": "Blob",
     "2": "Data Class",
     "3": "Feature Envy",
-    "4": "Long Method"
+    "4": "Long Method",
+    "5": "Refused Bequest",
+    "6": "Shotgun Surgery",
+    "7": "Inappropriate Intimacy",
+    "8": "Hardcoded Secrets",
+    "9": "SQL/Command Injection",
 }
 
 def map_ground_truth_label(entry: Dict[str, Any]) -> str:

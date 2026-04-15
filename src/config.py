@@ -75,6 +75,24 @@ AGENT_CONFIGS = {
         'temperature': TEMPERATURE,
         'enabled':     True,
     },
+    'relationship_detector': {
+        'model':       LLM_MODEL,
+        'base_url':    OLLAMA_BASE_URL,
+        'api_key':     OLLAMA_API_KEY,
+        'shot':        'few',  # 'few' | 'zero'
+        'timeout':     300,
+        'temperature': TEMPERATURE,
+        'enabled':     True,
+    },
+    'security_detector': {
+        'model':       LLM_MODEL,
+        'base_url':    OLLAMA_BASE_URL,
+        'api_key':     OLLAMA_API_KEY,
+        'shot':        'few',  # 'few' | 'zero'
+        'timeout':     300,
+        'temperature': TEMPERATURE,
+        'enabled':     True,
+    },
     'localization': {
         'enabled': True,
         'use_ast': True,
@@ -119,11 +137,16 @@ PIPELINE_CONFIG = {
 # TECHNICAL DEBT CATEGORIES
 # ========================================================================================
 TD_CATEGORIES = {
-    0: {'name': 'No Smell',     'granularity': 'any',    'severity': 'none',   'description': 'Code is clean and well-structured'},
-    1: {'name': 'Blob',         'granularity': 'class',  'severity': 'high',   'description': 'Class with too many responsibilities (God Class)'},
-    2: {'name': 'Data Class',   'granularity': 'class',  'severity': 'medium', 'description': 'Class with only getters/setters, no behavior'},
-    3: {'name': 'Feature Envy', 'granularity': 'method', 'severity': 'medium', 'description': 'Method heavily dependent on another class'},
-    4: {'name': 'Long Method',  'granularity': 'method', 'severity': 'high',   'description': 'Excessively long or complex method'},
+    0: {'name': 'No Smell',                'granularity': 'any',    'severity': 'none',   'description': 'Code is clean and well-structured'},
+    1: {'name': 'Blob',                    'granularity': 'class',  'severity': 'high',   'description': 'Class with too many responsibilities (God Class)'},
+    2: {'name': 'Data Class',              'granularity': 'class',  'severity': 'medium', 'description': 'Class with only getters/setters, no behavior'},
+    3: {'name': 'Feature Envy',            'granularity': 'method', 'severity': 'medium', 'description': 'Method heavily dependent on another class'},
+    4: {'name': 'Long Method',             'granularity': 'method', 'severity': 'high',   'description': 'Excessively long or complex method'},
+    5: {'name': 'Refused Bequest',         'granularity': 'class',  'severity': 'medium', 'description': 'Subclass that ignores or barely uses its parent\'s interface'},
+    6: {'name': 'Shotgun Surgery',         'granularity': 'class',  'severity': 'high',   'description': 'A change to one class forces many small changes across many other classes'},
+    7: {'name': 'Inappropriate Intimacy',  'granularity': 'class',  'severity': 'medium', 'description': 'Two classes that excessively access each other\'s internal details'},
+    8: {'name': 'Hardcoded Secrets',       'granularity': 'class',  'severity': 'critical','description': 'Passwords, API keys, or tokens embedded directly in source code'},
+    9: {'name': 'SQL/Command Injection',   'granularity': 'method', 'severity': 'critical','description': 'User input concatenated into SQL queries or OS commands without sanitisation'},
 }
 
 # ========================================================================================
@@ -135,6 +158,14 @@ THRESHOLDS = {
     'long_method_loc':         20,
     'long_method_complexity':  10,
     'data_class_method_ratio': 0.8,
+    # Relationship-level thresholds
+    'refused_bequest_override_ratio':             0.3,
+    'shotgun_surgery_coupled_classes':             5,
+    'shotgun_surgery_fan_out':                     10,
+    'inappropriate_intimacy_bidirectional_threshold': 3,
+    # Security-debt thresholds
+    'hardcoded_secret_min_length':                8,
+    'injection_string_concat_threshold':          2,
 }
 
 # ========================================================================================
@@ -157,6 +188,10 @@ from prompts import (
     CLASS_DETECTOR_ZERO_SHOT,
     METHOD_DETECTOR_FEW_SHOT,
     METHOD_DETECTOR_ZERO_SHOT,
+    RELATIONSHIP_DETECTOR_FEW_SHOT,
+    RELATIONSHIP_DETECTOR_ZERO_SHOT,
+    SECURITY_DETECTOR_FEW_SHOT,
+    SECURITY_DETECTOR_ZERO_SHOT,
     EXPLANATION_AGENT,
     FIX_SUGGESTION_AGENT,
     TD_GENERATOR_FEW_SHOT,
@@ -167,6 +202,8 @@ from prompts import (
     TD_REFINER_ZERO_SHOT,
     TASK_CLASS_DETECTION,
     TASK_METHOD_DETECTION,
+    TASK_RELATIONSHIP_DETECTION,
+    TASK_SECURITY_DETECTION,
     TASK_TD_DETECTION,
 )
 
@@ -186,5 +223,11 @@ SYS_MSG_TD_DETECTION_REFINER_ZERO_SHOT   = TD_REFINER_ZERO_SHOT
 TASK_PROMPT_CLASS_DETECTION              = TASK_CLASS_DETECTION
 TASK_PROMPT_METHOD_DETECTION             = TASK_METHOD_DETECTION
 TASK_PROMPT_TD_DETECTION                 = TASK_TD_DETECTION
+SYS_MSG_RELATIONSHIP_DETECTOR_FEW_SHOT   = RELATIONSHIP_DETECTOR_FEW_SHOT
+SYS_MSG_RELATIONSHIP_DETECTOR_ZERO_SHOT  = RELATIONSHIP_DETECTOR_ZERO_SHOT
+SYS_MSG_SECURITY_DETECTOR_FEW_SHOT       = SECURITY_DETECTOR_FEW_SHOT
+SYS_MSG_SECURITY_DETECTOR_ZERO_SHOT      = SECURITY_DETECTOR_ZERO_SHOT
+TASK_PROMPT_RELATIONSHIP_DETECTION       = TASK_RELATIONSHIP_DETECTION
+TASK_PROMPT_SECURITY_DETECTION           = TASK_SECURITY_DETECTION
 SYS_MSG_CLASS_LEVEL_FEW                  = CLASS_DETECTOR_FEW_SHOT
 SYS_MSG_METHOD_LEVEL_FEW                 = METHOD_DETECTOR_FEW_SHOT

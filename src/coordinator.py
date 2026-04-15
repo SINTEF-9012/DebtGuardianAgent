@@ -9,6 +9,8 @@ from pathlib import Path
 from debt_detector import (
     ClassDebtDetector,
     MethodDebtDetector,
+    RelationshipDebtDetector,
+    SecurityDebtDetector,
     LocalizationAgent,
     ExplanationAgent,
     FixSuggestionAgent
@@ -37,6 +39,8 @@ class DebtDetectionCoordinator:
         # Initialize agents based on config
         self.class_detector = None
         self.method_detector = None
+        self.relationship_detector = None
+        self.security_detector = None
         self.localizer = None
         self.explainer = None
         self.fix_suggester = None
@@ -66,6 +70,18 @@ class DebtDetectionCoordinator:
         if method_config.get('enabled', True):
             self.method_detector = MethodDebtDetector(method_config)
             print("[Init] Method Debt Detector initialized")
+        
+        # Relationship detector
+        rel_config = config.get('relationship_detector', {})
+        if rel_config.get('enabled', True):
+            self.relationship_detector = RelationshipDebtDetector(rel_config)
+            print("[Init] Relationship Debt Detector initialized")
+        
+        # Security detector
+        sec_config = config.get('security_detector', {})
+        if sec_config.get('enabled', True):
+            self.security_detector = SecurityDebtDetector(sec_config)
+            print("[Init] Security Debt Detector initialized")
         
         # Localizer
         loc_config = config.get('localization', {})
@@ -123,6 +139,17 @@ class DebtDetectionCoordinator:
                 if class_methods:
                     method_results = self._detect_method_debts(class_methods)
                     all_detections.extend(method_results)
+        
+        # Detect relationship-level debts (Refused Bequest, Shotgun Surgery, Inappropriate Intimacy)
+        if self.relationship_detector and classes:
+            self._resolve_bidirectional_dependencies(classes)
+            relationship_results = self._detect_relationship_debts(classes)
+            all_detections.extend(relationship_results)
+        
+        # Detect security debts (Hardcoded Secrets, SQL/Command Injection)
+        if self.security_detector:
+            security_results = self._detect_security_debts(classes, methods)
+            all_detections.extend(security_results)
         
         # Filter by confidence threshold
         filtered_detections = [
@@ -190,6 +217,183 @@ class DebtDetectionCoordinator:
         # Filter out "No Smell" results
         return [r for r in results if r.get('label') != '0']
     
+    def _detect_relationship_debts(self, classes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Detect relationship-level debts (Refused Bequest, Shotgun Surgery,
+        Inappropriate Intimacy) in all classes.
+        """
+        results = []
+
+        # Build a code lookup for providing related class context
+        class_code_lookup = {c['name']: c.get('code', '') for c in classes}
+
+        for class_info in classes:
+            metrics = class_info.get('metrics', {})
+
+            # Gate candidacy using relaxed thresholds to avoid unnecessary LLM calls
+            import config as cfg
+            coupling_threshold = cfg.THRESHOLDS.get('shotgun_surgery_coupled_classes', 5) // 2
+            intimacy_threshold = max(1, cfg.THRESHOLDS.get('inappropriate_intimacy_bidirectional_threshold', 3) // 2)
+
+            has_inheritance = bool(metrics.get('extends'))
+            has_high_coupling = metrics.get('coupled_class_count', 0) >= coupling_threshold
+            has_bidirectional = len(metrics.get('bidirectional_dependencies', [])) >= intimacy_threshold
+
+            if not (has_inheritance or has_high_coupling or has_bidirectional):
+                continue
+
+            # Build related code context for the LLM
+            related_code = ''
+            if has_inheritance and metrics.get('extends') in class_code_lookup:
+                related_code = class_code_lookup[metrics['extends']]
+            elif has_bidirectional:
+                related_parts = []
+                for dep_name in metrics.get('bidirectional_dependencies', [])[:2]:
+                    if dep_name in class_code_lookup:
+                        related_parts.append(class_code_lookup[dep_name])
+                related_code = '\n\n'.join(related_parts)
+
+            enriched_info = dict(class_info)
+            enriched_info['related_code'] = related_code
+
+            result = self.relationship_detector.detect(enriched_info)
+            results.append(result)
+            print(f"  [Relationship] {class_info['name']}: {result.get('debt_type', 'Unknown')}")
+
+        return [r for r in results if r.get('label') != '0']
+
+    def _resolve_bidirectional_dependencies(self, classes: List[Dict[str, Any]]):
+        """
+        Cross-reference outgoing class references across all classes in the file
+        to identify bidirectional dependencies (Inappropriate Intimacy signal).
+        """
+        class_names = {c['name'] for c in classes}
+
+        outgoing = {}
+        for c in classes:
+            refs = set(c.get('metrics', {}).get('outgoing_class_references', []))
+            outgoing[c['name']] = refs & class_names
+
+        for c in classes:
+            bidirectional = []
+            for other_name in outgoing.get(c['name'], []):
+                if c['name'] in outgoing.get(other_name, set()):
+                    bidirectional.append(other_name)
+            c.setdefault('metrics', {})['bidirectional_dependencies'] = bidirectional
+
+    def _detect_security_debts(self, classes: List[Dict[str, Any]],
+                                methods: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Detect security debts in classes and methods.
+        Scans both class-level code (for hardcoded secrets) and method-level
+        code (for injection vulnerabilities).
+        """
+        results = []
+
+        # Analyse classes for hardcoded secrets
+        for class_info in classes:
+            security_metrics = self._compute_security_metrics(class_info.get('code', ''))
+            if security_metrics.get('has_security_signals'):
+                enriched = dict(class_info)
+                enriched['security_metrics'] = security_metrics
+                result = self.security_detector.detect(enriched)
+                results.append(result)
+                print(f"  [Security] {class_info['name']}: {result.get('debt_type', 'Unknown')}")
+
+        # Analyse standalone methods for injection
+        for method_info in methods:
+            security_metrics = self._compute_security_metrics(method_info.get('code', ''))
+            if security_metrics.get('has_security_signals'):
+                enriched = dict(method_info)
+                enriched['security_metrics'] = security_metrics
+                result = self.security_detector.detect(enriched)
+                results.append(result)
+                print(f"  [Security] {method_info['name']}: {result.get('debt_type', 'Unknown')}")
+
+        # Also scan methods within classes
+        for class_info in classes:
+            for method_info in class_info.get('methods', []):
+                security_metrics = self._compute_security_metrics(method_info.get('code', ''))
+                if security_metrics.get('has_security_signals'):
+                    enriched = dict(method_info)
+                    enriched['security_metrics'] = security_metrics
+                    result = self.security_detector.detect(enriched)
+                    results.append(result)
+                    print(f"  [Security] {method_info['name']}: {result.get('debt_type', 'Unknown')}")
+
+        return [r for r in results if r.get('label') != '0']
+
+    @staticmethod
+    def _compute_security_metrics(code: str) -> Dict[str, Any]:
+        """
+        Compute heuristic security metrics from source code to gate LLM calls.
+        """
+        import re
+
+        metrics: Dict[str, Any] = {
+            'hardcoded_string_count': 0,
+            'secret_pattern_matches': [],
+            'sql_concat_count': 0,
+            'exec_calls': [],
+            'has_security_signals': False,
+        }
+
+        if not code:
+            return metrics
+
+        # --- Hardcoded secrets heuristics ---
+        secret_patterns = [
+            (r'(?i)(password|passwd|pwd)\s*=\s*["\'][^"\']{4,}["\']', 'password'),
+            (r'(?i)(api[_-]?key|apikey)\s*=\s*["\'][^"\']{8,}["\']', 'api_key'),
+            (r'(?i)(secret|token|auth)\s*=\s*["\'][^"\']{8,}["\']', 'secret/token'),
+            (r'(?i)(aws_access_key|aws_secret)\s*=\s*["\'][^"\']+["\']', 'aws_credential'),
+            (r'(?i)jdbc:[a-z]+://[^\s]+', 'jdbc_connection_string'),
+            (r'-----BEGIN\s+(RSA\s+)?PRIVATE\s+KEY-----', 'private_key'),
+        ]
+
+        for pattern, label in secret_patterns:
+            if re.search(pattern, code):
+                metrics['secret_pattern_matches'].append(label)
+
+        # Count suspicious hardcoded strings (long strings assigned to security-related vars)
+        hardcoded = re.findall(r'(?i)(?:password|secret|key|token|credential)\s*=\s*["\'][^"\']{8,}["\']', code)
+        metrics['hardcoded_string_count'] = len(hardcoded)
+
+        # --- SQL/Command injection heuristics ---
+        # String concatenation in SQL contexts
+        sql_concat_patterns = [
+            r'(?i)["\']SELECT\s.*?\+',
+            r'(?i)["\']INSERT\s.*?\+',
+            r'(?i)["\']UPDATE\s.*?\+',
+            r'(?i)["\']DELETE\s.*?\+',
+            r'(?i)executeQuery\s*\(\s*[^")]+\+',
+            r'(?i)executeUpdate\s*\(\s*[^")]+\+',
+            r'(?i)execute\s*\(\s*["\'].*?\+',
+        ]
+        for pattern in sql_concat_patterns:
+            metrics['sql_concat_count'] += len(re.findall(pattern, code))
+
+        # Command execution calls
+        exec_patterns = [
+            (r'Runtime\.getRuntime\(\)\.exec\s*\(', 'Runtime.exec'),
+            (r'ProcessBuilder\s*\(', 'ProcessBuilder'),
+            (r'(?i)os\.system\s*\(', 'os.system'),
+            (r'(?i)subprocess\.\w+\s*\(', 'subprocess'),
+            (r'(?i)eval\s*\(', 'eval'),
+        ]
+        for pattern, label in exec_patterns:
+            if re.search(pattern, code):
+                metrics['exec_calls'].append(label)
+
+        metrics['has_security_signals'] = bool(
+            metrics['secret_pattern_matches'] or
+            metrics['hardcoded_string_count'] > 0 or
+            metrics['sql_concat_count'] > 0 or
+            metrics['exec_calls']
+        )
+
+        return metrics
+
     def _post_process(self, detections: List[Dict[str, Any]], 
                      source_content: str) -> List[Dict[str, Any]]:
         """

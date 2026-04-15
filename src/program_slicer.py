@@ -182,6 +182,34 @@ class ProgramSlicerAgent:
                     ),
                 }
 
+                # --- Relationship metrics ---
+                # Inheritance info (Refused Bequest detection)
+                defn = cls.get('definition', '') or ''
+                extends_name = self._extract_extends(defn)
+                implements_names = self._extract_implements(defn)
+
+                metrics['extends'] = extends_name
+                metrics['implements'] = implements_names
+
+                # Override ratio
+                override_count = self._count_overrides_from_schema(cls)
+                inherited_estimate = self._estimate_inherited_methods(class_code, extends_name)
+                metrics['override_count'] = override_count
+                metrics['override_ratio'] = (
+                    override_count / inherited_estimate
+                    if inherited_estimate > 0 else 0.0
+                )
+
+                # Coupling metrics (Shotgun Surgery detection)
+                coupled_classes = self._extract_coupled_classes(class_code, class_name)
+                metrics['coupled_classes'] = coupled_classes
+                metrics['coupled_class_count'] = len(coupled_classes)
+                metrics['fan_out'] = self._count_external_calls(class_code)
+
+                # Outgoing references for bidirectional analysis (Inappropriate Intimacy)
+                metrics['outgoing_class_references'] = coupled_classes
+                metrics['bidirectional_dependencies'] = []  # Populated by coordinator
+
             return {
                 'type': 'class',
                 'name': class_name,
@@ -297,6 +325,94 @@ class ProgramSlicerAgent:
         modifiers = attrs.get('modifiers', []) or []
         defn = cls.get('definition', '') or ''
         return 'abstract' in modifiers or 'abstract' in defn.lower()
+
+    # ------------------------------------------------------------------
+    # Relationship metric helpers
+    # ------------------------------------------------------------------
+
+    def _extract_extends(self, definition: str) -> Optional[str]:
+        """Extract the parent class name from a class definition string."""
+        m = re.search(r'\bextends\s+(\w+)', definition)
+        if m:
+            return m.group(1)
+        # C# / Python style
+        m = re.search(r':\s*(\w+)', definition)
+        if m and m.group(1) not in ('public', 'private', 'protected', 'internal'):
+            return m.group(1)
+        return None
+
+    def _extract_implements(self, definition: str) -> List[str]:
+        """Extract implemented interface names from a class definition string."""
+        m = re.search(r'\bimplements\s+([\w,\s]+?)(?:\s*\{|$)', definition)
+        if m:
+            return [i.strip() for i in m.group(1).split(',') if i.strip()]
+        return []
+
+    def _count_overrides_from_schema(self, cls: Dict[str, Any]) -> int:
+        """
+        Count methods likely to be overrides using source_parser schema.
+        Checks for @Override annotations in method definition strings.
+        """
+        count = 0
+        common_overridable = {'toString', 'equals', 'hashCode', 'compareTo', 'clone',
+                              'finalize', 'run', 'call', 'iterator', 'close',
+                              'ToString', 'Equals', 'GetHashCode'}  # C# variants
+        for m in cls.get('methods', []):
+            name = m.get('name', '')
+            defn = m.get('definition', '') or ''
+            code = m.get('original_string', '') or ''
+            if '@Override' in defn or '@Override' in code[:200] or 'override ' in defn.lower():
+                count += 1
+            elif name in common_overridable:
+                count += 1
+        return count
+
+    def _estimate_inherited_methods(self, class_code: str, parent_name: Optional[str]) -> int:
+        """Estimate the number of overridable methods from the parent class."""
+        if not parent_name:
+            return 0
+        known_parents = {
+            'Object': 11, 'AbstractList': 15, 'AbstractMap': 14,
+            'AbstractSet': 8, 'Thread': 20, 'Observable': 5,
+            'Component': 30, 'JComponent': 40, 'JPanel': 10,
+            'JFrame': 15, 'HttpServlet': 8, 'ArrayList': 25,
+            'HashMap': 20, 'Vector': 25, 'LinkedList': 25,
+            'AbstractCollection': 12, 'InputStream': 6, 'OutputStream': 5,
+            'Reader': 6, 'Writer': 5,
+        }
+        return known_parents.get(parent_name, 8)
+
+    def _extract_coupled_classes(self, class_code: str, own_class_name: str) -> List[str]:
+        """
+        Extract names of other domain classes referenced in this class.
+        Filters out the class's own name and common JDK / framework types.
+        """
+        clean_code = re.sub(r'/\*.*?\*/', '', class_code, flags=re.S)
+        clean_code = re.sub(r'//.*', '', clean_code)
+        clean_code = re.sub(r'#.*', '', clean_code)
+
+        type_pattern = r'\b([A-Z][a-zA-Z0-9]+)\b'
+        all_types = set(re.findall(type_pattern, clean_code))
+
+        jdk_types = {
+            'String', 'Integer', 'Long', 'Double', 'Float', 'Boolean', 'Byte',
+            'Short', 'Character', 'Object', 'Class', 'System', 'Math',
+            'List', 'ArrayList', 'LinkedList', 'Map', 'HashMap', 'TreeMap',
+            'Set', 'HashSet', 'TreeSet', 'Queue', 'Deque', 'Stack', 'Vector',
+            'Collection', 'Collections', 'Arrays', 'Iterator', 'Iterable',
+            'Optional', 'Stream', 'Collectors',
+            'Exception', 'RuntimeException', 'Error', 'Throwable',
+            'IOException', 'IllegalArgumentException', 'NullPointerException',
+            'Override', 'Deprecated', 'SuppressWarnings', 'FunctionalInterface',
+            'Comparable', 'Serializable', 'Cloneable', 'Runnable', 'Callable',
+            'Thread', 'StringBuilder', 'StringBuffer', 'Date',
+            'Logger', 'Level', 'Console',
+        }
+
+        return sorted(
+            t for t in all_types
+            if t != own_class_name and t not in jdk_types and len(t) > 1
+        )
 
 
 # ------------------------------------------------------------------

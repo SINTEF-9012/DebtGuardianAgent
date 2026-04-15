@@ -20,6 +20,11 @@ class DebtType(Enum):
     DATA_CLASS = 2
     FEATURE_ENVY = 3
     LONG_METHOD = 4
+    REFUSED_BEQUEST = 5
+    SHOTGUN_SURGERY = 6
+    INAPPROPRIATE_INTIMACY = 7
+    HARDCODED_SECRETS = 8
+    SQL_COMMAND_INJECTION = 9
 
 
 class ClassDebtDetector:
@@ -280,13 +285,25 @@ class MethodDebtDetector:
             }
     
     def _normalize_label(self, text: str) -> str:
-        """Normalize agent response to valid label"""
-        # Extract digit (0, 3, or 4)
-        if '3' in text:
-            return '3'
-        elif '4' in text:
-            return '4'
-        elif '0' in text:
+        """Normalize agent response to valid label (0, 3, or 4)"""
+        text = str(text).strip()
+        
+        # First try: exact single-digit response
+        if text in ('0', '3', '4'):
+            return text
+        
+        # Second try: find a standalone digit using word boundaries.
+        for target in ['3', '4']:
+            if re.search(r'(?:^|\b|\s)' + target + r'(?:$|\b|\s|[,;.!?)])', text):
+                return target
+        if re.search(r'(?:^|\b|\s)0(?:$|\b|\s|[,;.!?)])', text):
+            return '0'
+        
+        # Last resort: any digit 3 or 4 found anywhere
+        match = re.search(r'[34]', text)
+        if match:
+            return match.group(0)
+        if '0' in text:
             return '0'
         return 'UNKNOWN'
     
@@ -599,3 +616,327 @@ class FixSuggestionAgent:
             debt_result['fix_suggestion'] = "Could not generate fix suggestion"
         
         return debt_result
+
+
+class RelationshipDebtDetector:
+    """
+    Specialized agent for detecting relationship-level code smells.
+    Optimized for Refused Bequest, Shotgun Surgery, and Inappropriate Intimacy detection.
+    These smells require semantic understanding of class relationships — inheritance hierarchies,
+    cross-class coupling patterns, and bidirectional dependencies — making them well-suited
+    for LLM-based detection rather than purely metric-driven approaches.
+    """
+
+    def __init__(self, agent_config: Dict[str, Any]):
+        self.config = agent_config
+        self.model = agent_config.get('model', config.LLM_MODEL)
+        self.base_url = agent_config.get('base_url', 'http://localhost:11434/v1')
+        self.api_key = agent_config.get('api_key', 'ollama')
+        self.shot_type = agent_config.get('shot', 'few')
+        self.temperature = agent_config.get('temperature', 0.1)
+        self.timeout = agent_config.get('timeout', 300)
+
+        self.llm_config = {
+            "config_list": [{
+                "model": self.model,
+                "base_url": self.base_url,
+                "api_key": self.api_key,
+            }],
+            "temperature": self.temperature,
+            "timeout": self.timeout,
+            "cache_seed": None,
+        }
+        self._agent = None
+
+    def _get_agent(self):
+        if self._agent is None:
+            if self.shot_type == 'few':
+                sys_prompt = config.SYS_MSG_RELATIONSHIP_DETECTOR_FEW_SHOT
+            else:
+                sys_prompt = config.SYS_MSG_RELATIONSHIP_DETECTOR_ZERO_SHOT
+
+            self._agent = create_agent(
+                agent_type="assistant",
+                name="relationship_debt_detector",
+                llm_config=self.llm_config,
+                sys_prompt=sys_prompt,
+                description="Detects relationship-level code smells (Refused Bequest, Shotgun Surgery, Inappropriate Intimacy)"
+            )
+        return self._agent
+
+    def detect(self, class_info: Dict[str, Any]) -> Dict[str, Any]:
+        code = class_info.get('code', '')
+        class_name = class_info.get('name', 'Unknown')
+        metrics = class_info.get('metrics', {})
+        related_code = class_info.get('related_code', '')
+
+        task_prompt = config.TASK_PROMPT_RELATIONSHIP_DETECTION
+
+        # Include relationship metrics as context for the LLM
+        context_parts = []
+        if metrics.get('extends'):
+            context_parts.append(f"Extends: {metrics['extends']}")
+        if metrics.get('implements'):
+            context_parts.append(f"Implements: {', '.join(metrics['implements'])}")
+        if metrics.get('override_ratio') is not None:
+            context_parts.append(f"Override ratio: {metrics['override_ratio']:.2f}")
+        if metrics.get('coupled_classes'):
+            context_parts.append(f"Coupled to classes: {', '.join(metrics['coupled_classes'])}")
+        if metrics.get('coupled_class_count', 0) > 0:
+            context_parts.append(f"Number of coupled domain classes: {metrics['coupled_class_count']}")
+        if metrics.get('bidirectional_dependencies'):
+            context_parts.append(f"Bidirectional dependencies with: {', '.join(metrics['bidirectional_dependencies'])}")
+
+        context_str = "\n".join(context_parts)
+
+        message = f"{task_prompt}"
+        if context_str:
+            message += f"Relationship context:\n{context_str}\n\n"
+        message += f"```java\n{code}\n```"
+        if related_code:
+            message += f"\n\nRelated class code for context:\n```java\n{related_code}\n```"
+
+        agent = self._get_agent()
+        response = agent.generate_reply(messages=[{"content": message, "role": "user"}])
+
+        if response:
+            label = self._normalize_label(response)
+            confidence = self._calculate_confidence(label, metrics)
+
+            return {
+                'type': 'class',
+                'name': class_name,
+                'label': label,
+                'debt_type': self._label_to_debt_type(label),
+                'confidence': confidence,
+                'metrics': metrics,
+                'raw_response': response,
+                'granularity': 'class'
+            }
+        else:
+            return {
+                'type': 'class',
+                'name': class_name,
+                'label': 'UNKNOWN',
+                'debt_type': None,
+                'confidence': 0.0,
+                'error': 'No response from agent'
+            }
+
+    def _normalize_label(self, text: str) -> str:
+        text = str(text).strip()
+        if text in ('0', '5', '6', '7'):
+            return text
+        for target in ['5', '6', '7']:
+            if re.search(r'(?:^|\b|\s)' + target + r'(?:$|\b|\s|[,;.!?)])', text):
+                return target
+        if re.search(r'(?:^|\b|\s)0(?:$|\b|\s|[,;.!?)])', text):
+            return '0'
+        match = re.search(r'[567]', text)
+        if match:
+            return match.group(0)
+        if '0' in text:
+            return '0'
+        return 'UNKNOWN'
+
+    def _label_to_debt_type(self, label: str) -> Optional[str]:
+        mapping = {
+            '0': 'No Smell',
+            '5': 'Refused Bequest',
+            '6': 'Shotgun Surgery',
+            '7': 'Inappropriate Intimacy',
+        }
+        return mapping.get(label)
+
+    def _calculate_confidence(self, label: str, metrics: Dict[str, Any]) -> float:
+        if label == '0':
+            return 0.9
+        elif label == '5':  # Refused Bequest
+            override_ratio = metrics.get('override_ratio', None)
+            has_extends = bool(metrics.get('extends'))
+            if not has_extends:
+                return 0.4
+            if override_ratio is not None:
+                if override_ratio < 0.2:
+                    return 0.85
+                elif override_ratio < 0.3:
+                    return 0.7
+                else:
+                    return 0.55
+            return 0.6
+        elif label == '6':  # Shotgun Surgery
+            coupled_count = metrics.get('coupled_class_count', 0)
+            fan_out = metrics.get('fan_out', 0)
+            if coupled_count >= 7 or fan_out >= 12:
+                return 0.85
+            elif coupled_count >= 5 or fan_out >= 8:
+                return 0.7
+            else:
+                return 0.55
+        elif label == '7':  # Inappropriate Intimacy
+            bidirectional_count = len(metrics.get('bidirectional_dependencies', []))
+            if bidirectional_count >= 5:
+                return 0.85
+            elif bidirectional_count >= 3:
+                return 0.7
+            else:
+                return 0.55
+        return 0.5
+
+
+class SecurityDebtDetector:
+    """
+    Specialized agent for detecting security-related technical debt.
+    Detects Hardcoded Secrets and SQL/Command Injection vulnerabilities.
+    Combines LLM semantic analysis with metric-based heuristics for confidence scoring.
+    """
+
+    def __init__(self, agent_config: Dict[str, Any]):
+        self.config = agent_config
+        self.model = agent_config.get('model', config.LLM_MODEL)
+        self.base_url = agent_config.get('base_url', 'http://localhost:11434/v1')
+        self.api_key = agent_config.get('api_key', 'ollama')
+        self.shot_type = agent_config.get('shot', 'few')
+        self.temperature = agent_config.get('temperature', 0.1)
+        self.timeout = agent_config.get('timeout', 300)
+
+        self.llm_config = {
+            "config_list": [{
+                "model": self.model,
+                "base_url": self.base_url,
+                "api_key": self.api_key,
+            }],
+            "temperature": self.temperature,
+            "timeout": self.timeout,
+            "cache_seed": None,
+        }
+        self._agent = None
+
+    def _get_agent(self):
+        if self._agent is None:
+            if self.shot_type == 'few':
+                sys_prompt = config.SYS_MSG_SECURITY_DETECTOR_FEW_SHOT
+            else:
+                sys_prompt = config.SYS_MSG_SECURITY_DETECTOR_ZERO_SHOT
+
+            self._agent = create_agent(
+                agent_type="assistant",
+                name="security_debt_detector",
+                llm_config=self.llm_config,
+                sys_prompt=sys_prompt,
+                description="Detects security-related technical debt (Hardcoded Secrets, SQL/Command Injection)"
+            )
+        return self._agent
+
+    def detect(self, code_info: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Detect security-related technical debt.
+
+        Args:
+            code_info: Dictionary with 'code', 'name', 'metrics', and optionally
+                       'security_metrics' containing heuristic signals.
+
+        Returns:
+            Detection result with label, confidence, and metadata
+        """
+        code = code_info.get('code', '')
+        name = code_info.get('name', 'Unknown')
+        metrics = code_info.get('metrics', {})
+        security_metrics = code_info.get('security_metrics', {})
+
+        task_prompt = config.TASK_PROMPT_SECURITY_DETECTION
+
+        # Include security metric context
+        context_parts = []
+        if security_metrics.get('hardcoded_string_count', 0) > 0:
+            context_parts.append(f"Suspicious hardcoded strings: {security_metrics['hardcoded_string_count']}")
+        if security_metrics.get('secret_pattern_matches'):
+            context_parts.append(f"Secret-like patterns: {', '.join(security_metrics['secret_pattern_matches'])}")
+        if security_metrics.get('sql_concat_count', 0) > 0:
+            context_parts.append(f"SQL string concatenations: {security_metrics['sql_concat_count']}")
+        if security_metrics.get('exec_calls'):
+            context_parts.append(f"Exec/command calls: {', '.join(security_metrics['exec_calls'])}")
+
+        context_str = "\n".join(context_parts)
+
+        message = f"{task_prompt}"
+        if context_str:
+            message += f"Security context:\n{context_str}\n\n"
+        message += f"```\n{code}\n```"
+
+        agent = self._get_agent()
+        response = agent.generate_reply(messages=[{"content": message, "role": "user"}])
+
+        if response:
+            label = self._normalize_label(response)
+            confidence = self._calculate_confidence(label, security_metrics)
+
+            granularity = 'class' if label == '8' else ('method' if label == '9' else code_info.get('granularity', 'class'))
+
+            return {
+                'type': code_info.get('type', 'class'),
+                'name': name,
+                'label': label,
+                'debt_type': self._label_to_debt_type(label),
+                'confidence': confidence,
+                'metrics': metrics,
+                'security_metrics': security_metrics,
+                'raw_response': response,
+                'granularity': granularity
+            }
+        else:
+            return {
+                'type': code_info.get('type', 'class'),
+                'name': name,
+                'label': 'UNKNOWN',
+                'debt_type': None,
+                'confidence': 0.0,
+                'error': 'No response from agent'
+            }
+
+    def _normalize_label(self, text: str) -> str:
+        text = str(text).strip()
+        if text in ('0', '8', '9'):
+            return text
+        for target in ['8', '9']:
+            if re.search(r'(?:^|\b|\s)' + target + r'(?:$|\b|\s|[,;.!?)])', text):
+                return target
+        if re.search(r'(?:^|\b|\s)0(?:$|\b|\s|[,;.!?)])', text):
+            return '0'
+        match = re.search(r'[89]', text)
+        if match:
+            return match.group(0)
+        if '0' in text:
+            return '0'
+        return 'UNKNOWN'
+
+    def _label_to_debt_type(self, label: str) -> Optional[str]:
+        mapping = {
+            '0': 'No Smell',
+            '8': 'Hardcoded Secrets',
+            '9': 'SQL/Command Injection',
+        }
+        return mapping.get(label)
+
+    def _calculate_confidence(self, label: str, security_metrics: Dict[str, Any]) -> float:
+        if label == '0':
+            return 0.9
+        elif label == '8':  # Hardcoded Secrets
+            pattern_count = len(security_metrics.get('secret_pattern_matches', []))
+            string_count = security_metrics.get('hardcoded_string_count', 0)
+            if pattern_count >= 3 or string_count >= 5:
+                return 0.9
+            elif pattern_count >= 1 or string_count >= 2:
+                return 0.75
+            else:
+                return 0.6
+        elif label == '9':  # SQL/Command Injection
+            sql_concat = security_metrics.get('sql_concat_count', 0)
+            exec_count = len(security_metrics.get('exec_calls', []))
+            if sql_concat >= 3 or exec_count >= 2:
+                return 0.9
+            elif sql_concat >= 1 or exec_count >= 1:
+                return 0.75
+            else:
+                return 0.6
+        return 0.5
