@@ -6,9 +6,6 @@ package com.example.samples;
  * Passwords, API keys, tokens, and connection strings should never appear as
  * string literals in source files. They should be loaded from environment
  * variables, secret vaults, or encrypted configuration files at runtime.
- *
- * This sample demonstrates common patterns that the security debt detector
- * should flag as category 8 (Hardcoded Secrets).
  */
 
 import java.sql.Connection;

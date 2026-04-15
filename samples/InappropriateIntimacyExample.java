@@ -12,11 +12,6 @@ import java.util.HashMap;
  * This smell is subtle because SOME bidirectional coupling is normal (e.g.,
  * Order/OrderLine). The key distinction is whether the coupling involves
  * reaching into internal state vs. using a well-defined public interface.
- * 
- * Static tools can count bidirectional references, but they cannot judge whether
- * the coupling is "inappropriate" vs. architecturally justified. An LLM can
- * reason about the domain roles of the classes and whether they should be
- * merged, decoupled, or are correctly intertwined.
  */
 
 // ============================================================================

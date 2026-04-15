@@ -2,10 +2,12 @@
 Coordinator Module
 Orchestrates the multi-agent technical debt detection workflow
 """
+import re
 import concurrent.futures
 from typing import Dict, Any, List, Optional
 from pathlib import Path
 
+import config as cfg
 from debt_detector import (
     ClassDebtDetector,
     MethodDebtDetector,
@@ -230,8 +232,7 @@ class DebtDetectionCoordinator:
         for class_info in classes:
             metrics = class_info.get('metrics', {})
 
-            # Gate candidacy using relaxed thresholds to avoid unnecessary LLM calls
-            import config as cfg
+            # Gate candidacy using relaxed thresholds
             coupling_threshold = cfg.THRESHOLDS.get('shotgun_surgery_coupled_classes', 5) // 2
             intimacy_threshold = max(1, cfg.THRESHOLDS.get('inappropriate_intimacy_bidirectional_threshold', 3) // 2)
 
@@ -325,10 +326,7 @@ class DebtDetectionCoordinator:
 
     @staticmethod
     def _compute_security_metrics(code: str) -> Dict[str, Any]:
-        """
-        Compute heuristic security metrics from source code to gate LLM calls.
-        """
-        import re
+        """Compute heuristic security metrics from source code."""
 
         metrics: Dict[str, Any] = {
             'hardcoded_string_count': 0,

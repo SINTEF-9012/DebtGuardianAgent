@@ -15,10 +15,6 @@ import java.util.HashMap;
  * class uses PricingRule's internal structure (ruleType, baseRate, tiers) in
  * domain-specific ways. A change to PricingRule's design would require touching
  * every one of them — the hallmark of Shotgun Surgery.
- * 
- * Static tools can count coupling, but they cannot distinguish this from benign
- * high fan-in (a Logger used everywhere). An LLM can reason that these are
- * semantically co-dependent domain classes, not utility consumers.
  */
 
 // ============================================================================

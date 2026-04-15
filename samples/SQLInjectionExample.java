@@ -12,9 +12,6 @@ import java.util.ArrayList;
  * User-controlled input concatenated directly into SQL queries or OS commands
  * enables injection attacks. Parameterised queries (PreparedStatement) and
  * process builder APIs with argument arrays should be used instead.
- *
- * This sample demonstrates common patterns that the security debt detector
- * should flag as category 9 (SQL/Command Injection).
  */
 
 // ============================================================================

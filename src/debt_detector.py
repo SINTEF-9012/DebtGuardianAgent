@@ -285,25 +285,13 @@ class MethodDebtDetector:
             }
     
     def _normalize_label(self, text: str) -> str:
-        """Normalize agent response to valid label (0, 3, or 4)"""
-        text = str(text).strip()
-        
-        # First try: exact single-digit response
-        if text in ('0', '3', '4'):
-            return text
-        
-        # Second try: find a standalone digit using word boundaries.
-        for target in ['3', '4']:
-            if re.search(r'(?:^|\b|\s)' + target + r'(?:$|\b|\s|[,;.!?)])', text):
-                return target
-        if re.search(r'(?:^|\b|\s)0(?:$|\b|\s|[,;.!?)])', text):
-            return '0'
-        
-        # Last resort: any digit 3 or 4 found anywhere
-        match = re.search(r'[34]', text)
-        if match:
-            return match.group(0)
-        if '0' in text:
+        """Normalize agent response to valid label"""
+        # Extract digit (0, 3, or 4)
+        if '3' in text:
+            return '3'
+        elif '4' in text:
+            return '4'
+        elif '0' in text:
             return '0'
         return 'UNKNOWN'
     
@@ -622,9 +610,6 @@ class RelationshipDebtDetector:
     """
     Specialized agent for detecting relationship-level code smells.
     Optimized for Refused Bequest, Shotgun Surgery, and Inappropriate Intimacy detection.
-    These smells require semantic understanding of class relationships — inheritance hierarchies,
-    cross-class coupling patterns, and bidirectional dependencies — making them well-suited
-    for LLM-based detection rather than purely metric-driven approaches.
     """
 
     def __init__(self, agent_config: Dict[str, Any]):
@@ -672,7 +657,7 @@ class RelationshipDebtDetector:
 
         task_prompt = config.TASK_PROMPT_RELATIONSHIP_DETECTION
 
-        # Include relationship metrics as context for the LLM
+        # Include relationship metrics as context
         context_parts = []
         if metrics.get('extends'):
             context_parts.append(f"Extends: {metrics['extends']}")
@@ -724,14 +709,7 @@ class RelationshipDebtDetector:
             }
 
     def _normalize_label(self, text: str) -> str:
-        text = str(text).strip()
-        if text in ('0', '5', '6', '7'):
-            return text
-        for target in ['5', '6', '7']:
-            if re.search(r'(?:^|\b|\s)' + target + r'(?:$|\b|\s|[,;.!?)])', text):
-                return target
-        if re.search(r'(?:^|\b|\s)0(?:$|\b|\s|[,;.!?)])', text):
-            return '0'
+        """Normalize agent response to valid label"""
         match = re.search(r'[567]', text)
         if match:
             return match.group(0)
@@ -788,7 +766,6 @@ class SecurityDebtDetector:
     """
     Specialized agent for detecting security-related technical debt.
     Detects Hardcoded Secrets and SQL/Command Injection vulnerabilities.
-    Combines LLM semantic analysis with metric-based heuristics for confidence scoring.
     """
 
     def __init__(self, agent_config: Dict[str, Any]):
@@ -895,14 +872,7 @@ class SecurityDebtDetector:
             }
 
     def _normalize_label(self, text: str) -> str:
-        text = str(text).strip()
-        if text in ('0', '8', '9'):
-            return text
-        for target in ['8', '9']:
-            if re.search(r'(?:^|\b|\s)' + target + r'(?:$|\b|\s|[,;.!?)])', text):
-                return target
-        if re.search(r'(?:^|\b|\s)0(?:$|\b|\s|[,;.!?)])', text):
-            return '0'
+        """Normalize agent response to valid label"""
         match = re.search(r'[89]', text)
         if match:
             return match.group(0)

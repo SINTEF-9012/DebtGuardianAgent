@@ -8,9 +8,7 @@ import java.util.ArrayList;
  * 
  * The inheritance relationship is semantically inappropriate: the child class
  * conceptually does not belong in the hierarchy and inherits methods that make
- * no sense in its domain context. This smell is hard to detect with metrics alone
- * because the override ratio is necessary but not sufficient — an LLM can judge
- * whether the parent's interface is semantically relevant to the child.
+ * no sense in its domain context.
  */
 
 // ============================================================================
