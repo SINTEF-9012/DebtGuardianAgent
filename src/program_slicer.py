@@ -206,9 +206,8 @@ class ProgramSlicerAgent:
                 metrics['coupled_class_count'] = len(coupled_classes)
                 metrics['fan_out'] = self._count_external_calls(class_code)
 
-                # Outgoing references for bidirectional analysis (Inappropriate Intimacy)
-                metrics['outgoing_class_references'] = coupled_classes
-                metrics['bidirectional_dependencies'] = []  # Populated by coordinator
+                # bidirectional_dependencies is populated later by the coordinator
+                metrics['bidirectional_dependencies'] = []
 
             return {
                 'type': 'class',

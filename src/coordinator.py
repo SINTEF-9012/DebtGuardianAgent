@@ -229,12 +229,12 @@ class DebtDetectionCoordinator:
         # Build a code lookup for providing related class context
         class_code_lookup = {c['name']: c.get('code', '') for c in classes}
 
+        # Pre-compute thresholds once (they don't change per class)
+        coupling_threshold = cfg.THRESHOLDS.get('shotgun_surgery_coupled_classes', 5) // 2
+        intimacy_threshold = max(1, cfg.THRESHOLDS.get('inappropriate_intimacy_bidirectional_threshold', 3) // 2)
+
         for class_info in classes:
             metrics = class_info.get('metrics', {})
-
-            # Gate candidacy using relaxed thresholds
-            coupling_threshold = cfg.THRESHOLDS.get('shotgun_surgery_coupled_classes', 5) // 2
-            intimacy_threshold = max(1, cfg.THRESHOLDS.get('inappropriate_intimacy_bidirectional_threshold', 3) // 2)
 
             has_inheritance = bool(metrics.get('extends'))
             has_high_coupling = metrics.get('coupled_class_count', 0) >= coupling_threshold
@@ -272,7 +272,7 @@ class DebtDetectionCoordinator:
 
         outgoing = {}
         for c in classes:
-            refs = set(c.get('metrics', {}).get('outgoing_class_references', []))
+            refs = set(c.get('metrics', {}).get('coupled_classes', []))
             outgoing[c['name']] = refs & class_names
 
         for c in classes:
@@ -301,8 +301,12 @@ class DebtDetectionCoordinator:
                 results.append(result)
                 print(f"  [Security] {class_info['name']}: {result.get('debt_type', 'Unknown')}")
 
-        # Analyse standalone methods for injection
-        for method_info in methods:
+        # Analyse all methods (standalone + those inside classes) for injection
+        all_methods = list(methods)
+        for class_info in classes:
+            all_methods.extend(class_info.get('methods', []))
+
+        for method_info in all_methods:
             security_metrics = self._compute_security_metrics(method_info.get('code', ''))
             if security_metrics.get('has_security_signals'):
                 enriched = dict(method_info)
@@ -310,17 +314,6 @@ class DebtDetectionCoordinator:
                 result = self.security_detector.detect(enriched)
                 results.append(result)
                 print(f"  [Security] {method_info['name']}: {result.get('debt_type', 'Unknown')}")
-
-        # Also scan methods within classes
-        for class_info in classes:
-            for method_info in class_info.get('methods', []):
-                security_metrics = self._compute_security_metrics(method_info.get('code', ''))
-                if security_metrics.get('has_security_signals'):
-                    enriched = dict(method_info)
-                    enriched['security_metrics'] = security_metrics
-                    result = self.security_detector.detect(enriched)
-                    results.append(result)
-                    print(f"  [Security] {method_info['name']}: {result.get('debt_type', 'Unknown')}")
 
         return [r for r in results if r.get('label') != '0']
 
