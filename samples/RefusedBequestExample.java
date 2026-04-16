@@ -3,20 +3,7 @@ package com.example.samples;
 import java.util.List;
 import java.util.ArrayList;
 
-/**
- * REFUSED BEQUEST - Examples of subclasses that ignore their parent's interface.
- * 
- * The inheritance relationship is semantically inappropriate: the child class
- * conceptually does not belong in the hierarchy and inherits methods that make
- * no sense in its domain context.
- */
-
-// ============================================================================
-// Example 1: Stack should not extend Vector
-// A classic real-world example from Java's standard library.
-// Stack is conceptually a LIFO data structure but inherits Vector's
-// random-access, indexed-insertion, and enumeration methods.
-// ============================================================================
+// --- DynamicArray and SimpleStack ---
 
 abstract class DynamicArray {
     protected Object[] elements;
@@ -74,21 +61,16 @@ abstract class DynamicArray {
     }
 }
 
-/**
- * REFUSED BEQUEST: SimpleStack extends DynamicArray but only meaningfully uses
- * add() as push() and removeAt() as pop(). It inherits get(), set(), insertAt(),
- * indexOf(), contains() — none of which are appropriate for a stack's interface.
- * The child ignores 7 out of 10 parent methods.
- */
+/** SimpleStack — LIFO wrapper backed by DynamicArray */
 public class SimpleStack extends DynamicArray {
 
     public void push(Object item) {
-        add(item);  // Only parent method that makes sense
+        add(item);
     }
 
     public Object pop() {
         if (size == 0) throw new RuntimeException("Stack is empty");
-        return removeAt(size - 1);  // Reuses parent but conceptually wrong inheritance
+        return removeAt(size - 1);
     }
 
     public Object peek() {
@@ -99,17 +81,10 @@ public class SimpleStack extends DynamicArray {
     public boolean isEmpty() {
         return size == 0;
     }
-
-    // None of the inherited methods (get, set, insertAt, indexOf, contains, clear)
-    // are overridden or make semantic sense for a Stack.
-    // A stack should NOT allow random access or indexed insertion.
 }
 
 
-// ============================================================================
-// Example 2: DataExporter extends AbstractReportGenerator but uses almost none
-// of its reporting interface. The inheritance was chosen for code reuse only.
-// ============================================================================
+// --- AbstractReportGenerator and DataExporter ---
 
 abstract class AbstractReportGenerator {
     protected String title;
@@ -138,21 +113,15 @@ abstract class AbstractReportGenerator {
     public String getAuthor() { return author; }
 }
 
-/**
- * REFUSED BEQUEST: DataExporter inherits a rich report-generation interface but
- * only needs addSection() and the title field. It stubs out generateHeader,
- * generateFooter, formatSection, addTableOfContents, addPageNumbers, renderToHTML,
- * and renderToPDF with empty/trivial implementations.
- */
+/** DataExporter — CSV export backed by AbstractReportGenerator */
 class DataExporter extends AbstractReportGenerator {
     private String delimiter;
 
     public DataExporter(String title, String delimiter) {
-        super(title, "system");  // author is meaningless for CSV export
+        super(title, "system");
         this.delimiter = delimiter;
     }
 
-    // All abstract methods stubbed out — semantically meaningless for CSV export
     @Override
     public String generateHeader() { return ""; }
 
@@ -163,18 +132,17 @@ class DataExporter extends AbstractReportGenerator {
     public String formatSection(String content) { return content; }
 
     @Override
-    public void addTableOfContents() { /* no-op: CSVs don't have TOCs */ }
+    public void addTableOfContents() { }
 
     @Override
-    public void addPageNumbers() { /* no-op: CSVs don't have pages */ }
+    public void addPageNumbers() { }
 
     @Override
-    public String renderToHTML() { return ""; }  // Not applicable
+    public String renderToHTML() { return ""; }
 
     @Override
-    public String renderToPDF() { return ""; }  // Not applicable
+    public String renderToPDF() { return ""; }
 
-    // The actual functionality — completely unrelated to report generation
     public String exportToCSV(List<String[]> data) {
         StringBuilder sb = new StringBuilder();
         for (String[] row : data) {

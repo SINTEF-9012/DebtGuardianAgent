@@ -1,19 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-/// <summary>
-/// REFUSED BEQUEST - Examples of subclasses that ignore their parent's interface.
-///
-/// The inheritance relationship is semantically inappropriate: the child class
-/// conceptually does not belong in the hierarchy and inherits methods that make
-/// no sense in its domain context.
-/// </summary>
-
-// ============================================================================
-// Example 1: Stack should not extend DynamicArray
-// Stack is conceptually a LIFO data structure but inherits random-access,
-// indexed-insertion, and enumeration methods.
-// ============================================================================
+// --- DynamicArray and SimpleStack ---
 
 public abstract class DynamicArray
 {
@@ -82,16 +70,13 @@ public abstract class DynamicArray
 }
 
 /// <summary>
-/// REFUSED BEQUEST: SimpleStack extends DynamicArray but only meaningfully uses
-/// Add() as Push() and RemoveAt() as Pop(). It inherits Get(), Set(), InsertAt(),
-/// IndexOf(), Contains() — none of which are appropriate for a stack's interface.
-/// The child ignores 7 out of 10 parent methods.
+/// SimpleStack — LIFO wrapper backed by DynamicArray
 /// </summary>
 public class SimpleStack : DynamicArray
 {
     public void Push(object item)
     {
-        Add(item); // Only parent method that makes sense
+        Add(item);
     }
 
     public object Pop()
@@ -107,17 +92,10 @@ public class SimpleStack : DynamicArray
     }
 
     public bool IsEmpty => count == 0;
-
-    // None of the inherited methods (Get, Set, InsertAt, IndexOf, Contains, Clear)
-    // are overridden or make semantic sense for a Stack.
-    // A stack should NOT allow random access or indexed insertion.
 }
 
 
-// ============================================================================
-// Example 2: DataExporter extends AbstractReportGenerator but uses almost none
-// of its reporting interface. The inheritance was chosen for code reuse only.
-// ============================================================================
+// --- AbstractReportGenerator and DataExporter ---
 
 public abstract class AbstractReportGenerator
 {
@@ -146,31 +124,26 @@ public abstract class AbstractReportGenerator
 }
 
 /// <summary>
-/// REFUSED BEQUEST: DataExporter inherits a rich report-generation interface but
-/// only needs AddSection() and the Title field. It stubs out GenerateHeader,
-/// GenerateFooter, FormatSection, AddTableOfContents, AddPageNumbers, RenderToHtml,
-/// and RenderToPdf with empty/trivial implementations.
+/// DataExporter — CSV export backed by AbstractReportGenerator
 /// </summary>
 public class DataExporter : AbstractReportGenerator
 {
     private readonly string _delimiter;
 
     public DataExporter(string title, string delimiter)
-        : base(title, "system") // author is meaningless for CSV export
+        : base(title, "system")
     {
         _delimiter = delimiter;
     }
 
-    // All abstract methods stubbed out — semantically meaningless for CSV export
     public override string GenerateHeader() => "";
     public override string GenerateFooter() => "";
     public override string FormatSection(string content) => content;
-    public override void AddTableOfContents() { /* no-op: CSVs don't have TOCs */ }
-    public override void AddPageNumbers() { /* no-op: CSVs don't have pages */ }
-    public override string RenderToHtml() => ""; // Not applicable
-    public override string RenderToPdf() => ""; // Not applicable
+    public override void AddTableOfContents() { }
+    public override void AddPageNumbers() { }
+    public override string RenderToHtml() => "";
+    public override string RenderToPdf() => "";
 
-    // The actual functionality — completely unrelated to report generation
     public string ExportToCsv(List<string[]> data)
     {
         var sb = new System.Text.StringBuilder();

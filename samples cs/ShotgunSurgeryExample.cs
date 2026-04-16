@@ -2,20 +2,10 @@ using System;
 using System.Collections.Generic;
 
 /// <summary>
-/// SHOTGUN SURGERY - Example of a class whose changes ripple across many others.
-///
-/// When PricingRule changes (e.g., adding a new pricing tier or changing the
-/// computation), at least 6 other domain classes must be modified in tandem.
-///
-/// This is NOT just high fan-in (like a Logger or utility class). Each dependent
-/// class uses PricingRule's internal structure (RuleType, BaseRate, TierRates) in
-/// domain-specific ways. A change to PricingRule's design would require touching
-/// every one of them — the hallmark of Shotgun Surgery.
+/// PricingRule and dependant domain classes
 /// </summary>
 
-// ============================================================================
-// The problematic class — changes here force changes in 6+ other classes
-// ============================================================================
+// --- PricingRule ---
 
 public class PricingRule
 {
@@ -63,9 +53,7 @@ public class PricingRule
 }
 
 
-// ============================================================================
-// Dependent class 1: OrderService inspects PricingRule internals
-// ============================================================================
+// --- OrderService ---
 
 public class OrderService
 {
@@ -99,9 +87,7 @@ public class OrderService
     }
 }
 
-// ============================================================================
-// Dependent class 2: InvoiceService formats pricing details
-// ============================================================================
+// --- InvoiceService ---
 
 public class InvoiceService
 {
@@ -120,9 +106,7 @@ public class InvoiceService
     }
 }
 
-// ============================================================================
-// Dependent class 3: DiscountEngine selects applicable rules
-// ============================================================================
+// --- DiscountEngine ---
 
 public class DiscountEngine
 {
@@ -147,9 +131,7 @@ public class DiscountEngine
     }
 }
 
-// ============================================================================
-// Dependent class 4: TaxCalculator applies rules before tax
-// ============================================================================
+// --- TaxCalculator ---
 
 public class TaxCalculator
 {
@@ -171,9 +153,7 @@ public class TaxCalculator
     }
 }
 
-// ============================================================================
-// Dependent class 5: QuoteGenerator previews pricing for customers
-// ============================================================================
+// --- QuoteGenerator ---
 
 public class QuoteGenerator
 {
@@ -201,9 +181,7 @@ public class QuoteGenerator
     }
 }
 
-// ============================================================================
-// Dependent class 6: BillingService processes recurring billing with pricing rules
-// ============================================================================
+// --- BillingService ---
 
 public class BillingService
 {
@@ -232,9 +210,7 @@ public class BillingService
 }
 
 
-// ============================================================================
-// Supporting classes
-// ============================================================================
+// --- Supporting classes ---
 
 public class LineItem
 {

@@ -3,14 +3,8 @@ package com.example.samples;
 import java.util.List;
 import java.util.ArrayList;
 
-/**
- * Examples of Long Method and Feature Envy code smells
- */
 public class CodeSmellExamples {
     
-    /**
-     * LONG METHOD - This method does too much and should be split
-     */
     public void processOrder(Order order) {
         // Validation
         if (order == null) {
@@ -92,9 +86,6 @@ public class CodeSmellExamples {
         logger.log("Total: $" + total);
     }
     
-    /**
-     * FEATURE ENVY - This method is too dependent on Customer class
-     */
     public String generateCustomerReport(Customer customer) {
         StringBuilder report = new StringBuilder();
         report.append("Customer Report\n");
@@ -147,9 +138,6 @@ public class CodeSmellExamples {
         return report.toString();
     }
     
-    /**
-     * Another FEATURE ENVY example
-     */
     public void updateCustomerLoyaltyPoints(Customer customer) {
         int currentPoints = customer.getLoyaltyPoints();
         int newPoints = 0;

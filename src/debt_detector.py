@@ -13,6 +13,21 @@ import config
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 
+# Extension → code-fence language tag
+_EXT_TO_LANG = {
+    '.java': 'java', '.cs': 'csharp', '.py': 'python',
+    '.js': 'javascript', '.ts': 'typescript',
+    '.cpp': 'cpp', '.cc': 'cpp', '.cxx': 'cpp', '.c': 'c',
+    '.h': 'cpp', '.hpp': 'cpp',
+}
+
+
+def _language_for_fence(file_path: str) -> str:
+    """Return the code-fence language tag for a file path."""
+    ext = os.path.splitext(file_path)[-1].lower()
+    return _EXT_TO_LANG.get(ext, '')
+
+
 class DebtType(Enum):
     """Technical debt categories"""
     NO_SMELL = 0
@@ -97,8 +112,9 @@ class ClassDebtDetector:
         metrics = class_info.get('metrics', {})
         
         # Build detection prompt
+        lang = _language_for_fence(class_info.get('file_path', ''))
         task_prompt = config.TASK_PROMPT_CLASS_DETECTION
-        message = f"{task_prompt}```java\n{code}\n```"
+        message = f"{task_prompt}```{lang}\n{code}\n```"
         
         # Get agent and perform detection
         agent = self._get_agent()
@@ -216,9 +232,6 @@ class MethodDebtDetector:
     
     def _get_agent(self):
         if self._agent is None:
-            from agent_utils import create_agent
-            import config
-            
             # Select system prompt
             if self.shot_type == 'few':
                 sys_prompt = config.SYS_MSG_METHOD_DETECTOR_FEW_SHOT
@@ -250,8 +263,9 @@ class MethodDebtDetector:
         metrics = method_info.get('metrics', {})
         
         # Build detection prompt
+        lang = _language_for_fence(method_info.get('file_path', ''))
         task_prompt = config.TASK_PROMPT_METHOD_DETECTION
-        message = f"{task_prompt}```java\n{code}\n```"
+        message = f"{task_prompt}```{lang}\n{code}\n```"
         
         # Get agent and perform detection
         agent = self._get_agent()
@@ -498,6 +512,7 @@ class ExplanationAgent:
         2. CONSEQUENCES of leaving it unaddressed
         3. IMPACT on code quality (readability, maintainability, testability)
         """
+        prompt = prompt.replace('```java', f'```{_language_for_fence(debt_result.get("file_path", ""))}')
         
         agent = self._get_agent()
         response = agent.generate_reply(messages=[{"content": prompt, "role": "user"}])
@@ -592,6 +607,7 @@ class FixSuggestionAgent:
 
         Keep suggestions practical and focused on the most impactful improvements.
         """
+        prompt = prompt.replace('```java', f'```{_language_for_fence(debt_result.get("file_path", ""))}')
         
         agent = self._get_agent()
         response = agent.generate_reply(messages=[{"content": prompt, "role": "user"}])
@@ -677,9 +693,10 @@ class RelationshipDebtDetector:
         message = f"{task_prompt}"
         if context_str:
             message += f"Relationship context:\n{context_str}\n\n"
-        message += f"```java\n{code}\n```"
+        lang = _language_for_fence(class_info.get('file_path', ''))
+        message += f"```{lang}\n{code}\n```"
         if related_code:
-            message += f"\n\nRelated class code for context:\n```java\n{related_code}\n```"
+            message += f"\n\nRelated class code for context:\n```{lang}\n{related_code}\n```"
 
         agent = self._get_agent()
         response = agent.generate_reply(messages=[{"content": message, "role": "user"}])

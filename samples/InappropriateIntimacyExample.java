@@ -5,20 +5,7 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
 
-/**
- * INAPPROPRIATE INTIMACY - Two classes that excessively access each other's
- * internal details, creating tight bidirectional coupling.
- * 
- * This smell is subtle because SOME bidirectional coupling is normal (e.g.,
- * Order/OrderLine). The key distinction is whether the coupling involves
- * reaching into internal state vs. using a well-defined public interface.
- */
-
-// ============================================================================
-// Example 1: Parser and Lexer with excessive mutual access to internals
-// These classes reach into each other's private fields and modify internal
-// state directly, rather than communicating through a clean interface.
-// ============================================================================
+// --- Parser, Lexer, and supporting Token class ---
 
 class Token {
     String type;
@@ -35,7 +22,7 @@ class Token {
 }
 
 class Lexer {
-    // Internal state that Parser should NOT directly access
+    // Internal state
     String source;
     int currentPos;
     int currentLine;
@@ -44,7 +31,7 @@ class Lexer {
     List<String> errorList;
     boolean hasErrors;
     
-    // Reference to Parser — creates bidirectional dependency
+    // Reference to Parser
     Parser parser;
 
     public Lexer(String source) {
@@ -70,8 +57,6 @@ class Lexer {
                 continue;
             }
 
-            // INAPPROPRIATE: Directly accesses Parser's internal parseStack
-            // to decide how to tokenize context-sensitively
             if (parser.parseStack.size() > 0) {
                 String context = parser.parseStack.get(parser.parseStack.size() - 1);
                 if (context.equals("STRING_LITERAL")) {
@@ -80,7 +65,6 @@ class Lexer {
                 }
             }
 
-            // INAPPROPRIATE: Directly modifies Parser's internal error count
             if (c == '#' && currentPos + 1 < source.length() 
                     && source.charAt(currentPos + 1) == '!') {
                 parser.errorCount++;
@@ -88,11 +72,9 @@ class Lexer {
                 errorList.add(parser.lastError);
             }
 
-            // INAPPROPRIATE: Reads Parser's internal symbol table to resolve ambiguity
             if (Character.isLetter(c)) {
                 String word = readWord();
                 if (parser.symbolTable.containsKey(word)) {
-                    // Check parser's symbol table to determine token type
                     String symbolType = parser.symbolTable.get(word);
                     tokenBuffer.add(new Token(symbolType, word, currentLine, currentColumn));
                 } else {
@@ -106,7 +88,6 @@ class Lexer {
         }
     }
 
-    // INAPPROPRIATE: Parser calls this to directly manipulate Lexer's position
     public void rewindTo(int position) {
         this.currentPos = position;
     }
@@ -125,7 +106,6 @@ class Lexer {
     }
 
     private void tokenizeStringContent() {
-        // INAPPROPRIATE: Modifies Parser's state while tokenizing
         parser.inStringLiteral = true;
         int start = currentPos;
         while (currentPos < source.length() && source.charAt(currentPos) != '"') {
@@ -139,7 +119,7 @@ class Lexer {
 
 
 class Parser {
-    // Internal state that Lexer should NOT directly access
+    // Internal state
     List<String> parseStack;
     Map<String, String> symbolTable;
     int errorCount;
@@ -147,7 +127,7 @@ class Parser {
     boolean inStringLiteral;
     List<Object> astNodes;
 
-    // Reference to Lexer — creates bidirectional dependency
+    // Reference to Lexer
     Lexer lexer;
 
     public Parser(Lexer lexer) {
@@ -160,11 +140,9 @@ class Parser {
     }
 
     public void parse() {
-        // INAPPROPRIATE: Directly accesses Lexer's internal tokenBuffer
         for (int i = 0; i < lexer.tokenBuffer.size(); i++) {
             Token token = lexer.tokenBuffer.get(i);
 
-            // INAPPROPRIATE: Directly reads/writes Lexer's internal position
             int savedPos = lexer.currentPos;
             
             if (token.type.equals("IDENTIFIER")) {
@@ -173,11 +151,10 @@ class Parser {
                 parseSymbol(token, i);
             }
 
-            // INAPPROPRIATE: Directly checks Lexer's error state
             if (lexer.hasErrors) {
                 errorCount += lexer.errorList.size();
-                lexer.errorList.clear();  // Directly modifies Lexer's internal list
-                lexer.hasErrors = false;  // Directly modifies Lexer's internal flag
+                lexer.errorList.clear();
+                lexer.hasErrors = false;
             }
         }
     }
@@ -186,7 +163,6 @@ class Parser {
         symbolTable.put(token.value, "VARIABLE");
         parseStack.add(token.value);
 
-        // INAPPROPRIATE: Directly manipulates Lexer's tokenBuffer to insert synthetic tokens
         if (token.value.equals("var")) {
             lexer.tokenBuffer.add(new Token("TYPE_INFERRED", "auto", token.line, token.column));
         }
@@ -196,8 +172,7 @@ class Parser {
         if (token.value.equals("\"")) {
             parseStack.add("STRING_LITERAL");
             
-            // INAPPROPRIATE: Tells Lexer to re-tokenize from this position
-            // by directly manipulating Lexer's internal position
+            // Tells Lexer to re-tokenize from this position
             lexer.currentPos = findSourcePosition(token);
             lexer.tokenize();  // Forces re-tokenization from modified position
         }
@@ -212,7 +187,6 @@ class Parser {
     }
 
     private int findSourcePosition(Token token) {
-        // INAPPROPRIATE: Accesses Lexer's internal source string
         String source = lexer.source;
         int line = 1;
         int col = 1;
@@ -226,9 +200,7 @@ class Parser {
 }
 
 
-// ============================================================================
-// Example 2: SessionManager and SecurityContext with bidirectional intimacy
-// ============================================================================
+// --- SecurityContext and SessionManager ---
 
 class SecurityContext {
     // Internal state
@@ -250,12 +222,9 @@ class SecurityContext {
         this.currentUserId = userId;
         this.permissions = loadPermissions(userId);
 
-        // INAPPROPRIATE: Directly accesses SessionManager's internal session map
         if (sessionManager.activeSessions.containsKey(userId)) {
-            // Directly modifies SessionManager's internal state
             sessionManager.activeSessions.get(userId).lastActivity = System.currentTimeMillis();
         } else {
-            // Directly creates entries in SessionManager's internal map
             Session session = new Session(userId);
             sessionManager.activeSessions.put(userId, session);
             sessionManager.sessionCount++;
@@ -263,7 +232,6 @@ class SecurityContext {
     }
 
     public boolean hasPermission(String action) {
-        // INAPPROPRIATE: Checks SessionManager's internal timeout map
         if (sessionManager.timeoutOverrides.containsKey(currentUserId)) {
             long timeout = sessionManager.timeoutOverrides.get(currentUserId);
             if (System.currentTimeMillis() > timeout) {
@@ -297,7 +265,6 @@ class SessionManager {
     }
 
     public void createSession(String userId) {
-        // INAPPROPRIATE: Directly reads SecurityContext's internal permissions
         if (securityContext.permissions.contains("ADMIN")) {
             // Admins bypass session limits
             activeSessions.put(userId, new Session(userId));
@@ -306,7 +273,6 @@ class SessionManager {
             sessionCount++;
         }
 
-        // INAPPROPRIATE: Directly modifies SecurityContext's lock state
         if (sessionCount >= maxSessions) {
             securityContext.locked = true;
         }
@@ -316,7 +282,6 @@ class SessionManager {
         activeSessions.remove(userId);
         sessionCount--;
 
-        // INAPPROPRIATE: Directly modifies SecurityContext's internal state
         securityContext.locked = false;
         securityContext.currentUserId = null;
         securityContext.permissions.clear();
@@ -327,7 +292,6 @@ class SessionManager {
         if (session != null) {
             session.lastActivity = System.currentTimeMillis();
             
-            // INAPPROPRIATE: Directly reads SecurityContext's token expirations
             Long expiry = securityContext.tokenExpirations.get(userId);
             if (expiry != null && System.currentTimeMillis() > expiry) {
                 destroySession(userId);

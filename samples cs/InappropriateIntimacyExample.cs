@@ -1,20 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-/// <summary>
-/// INAPPROPRIATE INTIMACY - Two classes that excessively access each other's
-/// internal details, creating tight bidirectional coupling.
-///
-/// This smell is subtle because SOME bidirectional coupling is normal (e.g.,
-/// Order/OrderLine). The key distinction is whether the coupling involves
-/// reaching into internal state vs. using a well-defined public interface.
-/// </summary>
-
-// ============================================================================
-// Example 1: Parser and Lexer with excessive mutual access to internals
-// These classes reach into each other's fields and modify internal
-// state directly, rather than communicating through a clean interface.
-// ============================================================================
+// --- Lexer, Parser, and supporting Token class ---
 
 public class Token
 {
@@ -69,7 +56,6 @@ public class Lexer
                 continue;
             }
 
-            // INAPPROPRIATE: Directly accesses Parser's internal ParseStack
             if (Parser.ParseStack.Count > 0)
             {
                 string context = Parser.ParseStack[Parser.ParseStack.Count - 1];
@@ -80,7 +66,6 @@ public class Lexer
                 }
             }
 
-            // INAPPROPRIATE: Directly modifies Parser's internal error count
             if (c == '#' && CurrentPos + 1 < Source.Length
                     && Source[CurrentPos + 1] == '!')
             {
@@ -89,7 +74,6 @@ public class Lexer
                 ErrorList.Add(Parser.LastError);
             }
 
-            // INAPPROPRIATE: Reads Parser's internal symbol table to resolve ambiguity
             if (char.IsLetter(c))
             {
                 string word = ReadWord();
@@ -110,7 +94,6 @@ public class Lexer
         }
     }
 
-    // INAPPROPRIATE: Parser calls this to directly manipulate Lexer's position
     public void RewindTo(int position)
     {
         CurrentPos = position;
@@ -134,7 +117,6 @@ public class Lexer
 
     private void TokenizeStringContent()
     {
-        // INAPPROPRIATE: Modifies Parser's state while tokenizing
         Parser.InStringLiteral = true;
         int start = CurrentPos;
         while (CurrentPos < Source.Length && Source[CurrentPos] != '"')
@@ -150,7 +132,6 @@ public class Lexer
 
 public class Parser
 {
-    // Internal state that Lexer should NOT directly access
     public List<string> ParseStack;
     public Dictionary<string, string> SymbolTable;
     public int ErrorCount;
@@ -158,7 +139,6 @@ public class Parser
     public bool InStringLiteral;
     public List<object> AstNodes;
 
-    // Reference to Lexer — creates bidirectional dependency
     public Lexer Lexer;
 
     public Parser(Lexer lexer)
@@ -173,12 +153,10 @@ public class Parser
 
     public void Parse()
     {
-        // INAPPROPRIATE: Directly accesses Lexer's internal TokenBuffer
         for (int i = 0; i < Lexer.TokenBuffer.Count; i++)
         {
             Token token = Lexer.TokenBuffer[i];
 
-            // INAPPROPRIATE: Directly reads/writes Lexer's internal position
             int savedPos = Lexer.CurrentPos;
 
             if (token.Type == "IDENTIFIER")
@@ -190,12 +168,11 @@ public class Parser
                 ParseSymbol(token, i);
             }
 
-            // INAPPROPRIATE: Directly checks Lexer's error state
             if (Lexer.HasErrors)
             {
                 ErrorCount += Lexer.ErrorList.Count;
-                Lexer.ErrorList.Clear();  // Directly modifies Lexer's internal list
-                Lexer.HasErrors = false;  // Directly modifies Lexer's internal flag
+                Lexer.ErrorList.Clear();
+                Lexer.HasErrors = false;
             }
         }
     }
@@ -205,7 +182,6 @@ public class Parser
         SymbolTable[token.Value] = "VARIABLE";
         ParseStack.Add(token.Value);
 
-        // INAPPROPRIATE: Directly manipulates Lexer's TokenBuffer
         if (token.Value == "var")
         {
             Lexer.TokenBuffer.Add(
@@ -219,7 +195,6 @@ public class Parser
         {
             ParseStack.Add("STRING_LITERAL");
 
-            // INAPPROPRIATE: Tells Lexer to re-tokenize from this position
             Lexer.CurrentPos = FindSourcePosition(token);
             Lexer.Tokenize(); // Forces re-tokenization from modified position
         }
@@ -239,7 +214,6 @@ public class Parser
 
     private int FindSourcePosition(Token token)
     {
-        // INAPPROPRIATE: Accesses Lexer's internal Source string
         string source = Lexer.Source;
         int line = 1, col = 1;
         for (int i = 0; i < source.Length; i++)
@@ -253,9 +227,7 @@ public class Parser
 }
 
 
-// ============================================================================
-// Example 2: SessionManager and SecurityContext with bidirectional intimacy
-// ============================================================================
+// --- SessionManager and SecurityContext ---
 
 public class SecurityContext
 {
@@ -280,7 +252,6 @@ public class SecurityContext
         CurrentUserId = userId;
         Permissions = LoadPermissions(userId);
 
-        // INAPPROPRIATE: Directly accesses SessionManager's internal session dictionary
         if (SessionManager.ActiveSessions.ContainsKey(userId))
         {
             SessionManager.ActiveSessions[userId].LastActivity =
@@ -296,7 +267,6 @@ public class SecurityContext
 
     public bool HasPermission(string action)
     {
-        // INAPPROPRIATE: Checks SessionManager's internal timeout map
         if (SessionManager.TimeoutOverrides.ContainsKey(CurrentUserId))
         {
             long timeout = SessionManager.TimeoutOverrides[CurrentUserId];
@@ -333,7 +303,6 @@ public class SessionManager
 
     public void CreateSession(string userId)
     {
-        // INAPPROPRIATE: Directly reads SecurityContext's internal Permissions
         if (SecurityContext.Permissions.Contains("ADMIN"))
         {
             ActiveSessions[userId] = new Session(userId);
@@ -344,7 +313,6 @@ public class SessionManager
             SessionCount++;
         }
 
-        // INAPPROPRIATE: Directly modifies SecurityContext's lock state
         if (SessionCount >= MaxSessions)
         {
             SecurityContext.Locked = true;
@@ -356,7 +324,6 @@ public class SessionManager
         ActiveSessions.Remove(userId);
         SessionCount--;
 
-        // INAPPROPRIATE: Directly modifies SecurityContext's internal state
         SecurityContext.Locked = false;
         SecurityContext.CurrentUserId = null;
         SecurityContext.Permissions.Clear();
@@ -368,7 +335,6 @@ public class SessionManager
         {
             session.LastActivity = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-            // INAPPROPRIATE: Directly reads SecurityContext's token expirations
             if (SecurityContext.TokenExpirations.TryGetValue(userId, out long expiry)
                 && DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() > expiry)
             {

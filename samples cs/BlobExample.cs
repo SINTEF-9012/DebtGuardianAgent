@@ -4,8 +4,7 @@ using System.Data;
 using System.Data.SqlClient;
 
 /// <summary>
-/// OrderManager - Example of Blob (God Class) code smell
-/// This class has too many responsibilities and should be split
+/// OrderManager — handles orders, payments, notifications, reporting, and storage
 /// </summary>
 public class OrderManager
 {

@@ -5,21 +5,9 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
 
-/**
- * SHOTGUN SURGERY - Example of a class whose changes ripple across many others.
- * 
- * When PricingRule changes (e.g., adding a new pricing tier or changing the 
- * computation), at least 6 other domain classes must be modified in tandem.
- * 
- * This is NOT just high fan-in (like a Logger or utility class). Each dependent
- * class uses PricingRule's internal structure (ruleType, baseRate, tiers) in
- * domain-specific ways. A change to PricingRule's design would require touching
- * every one of them — the hallmark of Shotgun Surgery.
- */
+/** PricingRule and dependant domain classes */
 
-// ============================================================================
-// The problematic class — changes here force changes in 6+ other classes
-// ============================================================================
+// --- PricingRule ---
 
 class PricingRule {
     private String ruleId;
@@ -71,9 +59,7 @@ class PricingRule {
 }
 
 
-// ============================================================================
-// Dependent class 1: OrderService inspects PricingRule internals
-// ============================================================================
+// --- OrderService ---
 
 class OrderService {
     private List<PricingRule> applicableRules;
@@ -100,9 +86,7 @@ class OrderService {
     }
 }
 
-// ============================================================================
-// Dependent class 2: InvoiceService formats pricing details
-// ============================================================================
+// --- InvoiceService ---
 
 class InvoiceService {
     public String generateInvoice(Order order, List<PricingRule> rules) {
@@ -120,9 +104,7 @@ class InvoiceService {
     }
 }
 
-// ============================================================================
-// Dependent class 3: DiscountEngine selects applicable rules
-// ============================================================================
+// --- DiscountEngine ---
 
 class DiscountEngine {
     private List<PricingRule> allRules;
@@ -145,9 +127,7 @@ class DiscountEngine {
     }
 }
 
-// ============================================================================
-// Dependent class 4: TaxCalculator applies rules before tax
-// ============================================================================
+// --- TaxCalculator ---
 
 class TaxCalculator {
     private double taxRate;
@@ -172,9 +152,7 @@ class TaxCalculator {
     }
 }
 
-// ============================================================================
-// Dependent class 5: QuoteGenerator previews pricing for customers
-// ============================================================================
+// --- QuoteGenerator ---
 
 class QuoteGenerator {
     public String buildQuote(List<LineItem> items, List<PricingRule> rules) {
@@ -200,9 +178,7 @@ class QuoteGenerator {
     }
 }
 
-// ============================================================================
-// Dependent class 6: BillingService processes recurring billing with pricing rules
-// ============================================================================
+// --- BillingService ---
 
 class BillingService {
     public double processBilling(Customer customer, List<PricingRule> rules) {
@@ -226,9 +202,7 @@ class BillingService {
 }
 
 
-// ============================================================================
-// Supporting classes
-// ============================================================================
+// --- Supporting classes ---
 
 class LineItem {
     private String productId;

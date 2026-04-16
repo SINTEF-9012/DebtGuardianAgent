@@ -1,11 +1,35 @@
 import subprocess
 import signal
 import os
+import time
 import threading
 import ollama
 from typing import Optional
 
 # --- Ollama Query Function ---
+
+def warm_model(model: str, retries: int = 3, delay: float = 2.0) -> bool:
+    """
+    Pre-load a model in the Ollama server so the first real request
+    does not hit a cold-start 500.  Sends a minimal generate call and
+    retries on failure (the server may need a second attempt with its
+    fallback runner engine).
+
+    Returns True if the model responded, False otherwise.
+    """
+    for attempt in range(1, retries + 1):
+        try:
+            ollama.generate(model=model, prompt="hi", options={"num_predict": 1})
+            print(f"[Ollama] Model '{model}' warmed up (attempt {attempt})")
+            return True
+        except Exception as e:
+            print(f"[Ollama] Warm-up attempt {attempt}/{retries} failed: {e}")
+            if attempt < retries:
+                time.sleep(delay)
+    print(f"[Ollama] WARNING: Could not pre-load model '{model}'")
+    return False
+
+
 def ask_ollama(model, prompt, temperature=0):
     try:
         response = ollama.generate(

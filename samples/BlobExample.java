@@ -8,10 +8,7 @@ import java.sql.Connection;
 import java.sql.Statement;
 import java.sql.ResultSet;
 
-/**
- * OrderManager - Example of Blob (God Class) code smell
- * This class has too many responsibilities and should be split
- */
+/** OrderManager — handles orders, payments, notifications, reporting, and storage */
 public class OrderManager {
     private Connection database;
     private EmailService emailService;

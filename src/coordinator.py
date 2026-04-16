@@ -442,7 +442,7 @@ class DebtDetectionCoordinator:
         return summary
     
     def analyze_repository(self, repo_path: str, 
-                          file_patterns: List[str] = ['**/*.java']) -> Dict[str, Any]:
+                          file_patterns: List[str] = None) -> Dict[str, Any]:
         """
         Analyze an entire repository.
         
@@ -453,6 +453,8 @@ class DebtDetectionCoordinator:
         Returns:
             Repository-wide analysis results
         """
+        if file_patterns is None:
+            file_patterns = ['**/*.java', '**/*.cs', '**/*.py', '**/*.js', '**/*.ts', '**/*.cpp']
         
         repo_path = Path(repo_path)
         slicer = ProgramSlicerAgent()

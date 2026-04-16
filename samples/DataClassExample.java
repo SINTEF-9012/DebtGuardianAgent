@@ -1,9 +1,6 @@
 package com.example.samples;
 
-/**
- * DATA CLASS - This class only contains fields with getters/setters
- * It lacks meaningful behavior
- */
+/** CustomerRecord — stores customer profile data */
 public class CustomerRecord {
     private String id;
     private String firstName;
@@ -139,9 +136,7 @@ public class CustomerRecord {
 }
 
 
-/**
- * Another DATA CLASS example - Product information
- */
+/** ProductDTO — product catalogue entry */
 class ProductDTO {
     private String productId;
     private String name;

@@ -9,6 +9,10 @@ Provides endpoints for:
 - Querying available LLM models
 - Returning structured JSON analysis results
 """
+import warnings
+# Suppress autogen/pydantic protected-namespace warnings (model_client_cls vs model_*)
+warnings.filterwarnings("ignore", message=r".*protected namespace.*model_.*")
+
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
@@ -34,7 +38,7 @@ CORS(app)  # Enable CORS for browser-based clients
 
 # Configuration
 UPLOAD_FOLDER = tempfile.mkdtemp()
-ALLOWED_EXTENSIONS = {'java', 'cpp', 'cs', 'py', 'js'}
+ALLOWED_EXTENSIONS = {'java', 'cpp', 'cs', 'py', 'js', 'ts'}
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB for folder uploads
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -54,7 +58,8 @@ def get_file_language(filename):
         'cpp': 'C++',
         'cs': 'C#',
         'py': 'Python',
-        'js': 'JavaScript'
+        'js': 'JavaScript',
+        'ts': 'TypeScript'
     }
     return language_map.get(ext, 'Unknown')
 
@@ -405,7 +410,8 @@ def analyze_single_file():
             'cpp': '.cpp',
             'cs': '.cs',
             'python': '.py',
-            'javascript': '.js'
+            'javascript': '.js',
+            'typescript': '.ts'
         }
         extension = ext_map.get(language.lower(), '.java')
         
@@ -626,6 +632,10 @@ if __name__ == '__main__':
     print("  DELETE /api/sessions/<id>    - Delete a session")
     print("\nAPI will be available at http://localhost:5000")
     print("="*80 + "\n")
+    
+    # Pre-warm the Ollama model so the first real request doesn't hit a cold-start 500
+    from ollama_utils import warm_model
+    warm_model(config.LLM_MODEL)
     
     # Run periodic cleanup
     import threading

@@ -1,8 +1,7 @@
 using System;
 
 /// <summary>
-/// DATA CLASS - This class only contains fields with getters/setters.
-/// It lacks meaningful behavior.
+/// CustomerRecord — stores customer profile data
 /// </summary>
 public class CustomerRecord
 {
@@ -35,7 +34,7 @@ public class CustomerRecord
 
 
 /// <summary>
-/// Another DATA CLASS example - Product information
+/// ProductDTO — product catalogue entry
 /// </summary>
 public class ProductDTO
 {

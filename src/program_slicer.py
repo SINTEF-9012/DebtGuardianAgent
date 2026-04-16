@@ -394,6 +394,7 @@ class ProgramSlicerAgent:
         all_types = set(re.findall(type_pattern, clean_code))
 
         jdk_types = {
+            # Java / C#
             'String', 'Integer', 'Long', 'Double', 'Float', 'Boolean', 'Byte',
             'Short', 'Character', 'Object', 'Class', 'System', 'Math',
             'List', 'ArrayList', 'LinkedList', 'Map', 'HashMap', 'TreeMap',
@@ -406,6 +407,13 @@ class ProgramSlicerAgent:
             'Comparable', 'Serializable', 'Cloneable', 'Runnable', 'Callable',
             'Thread', 'StringBuilder', 'StringBuffer', 'Date',
             'Logger', 'Level', 'Console',
+            # JavaScript / TypeScript
+            'Array', 'Promise', 'JSON', 'RegExp', 'Symbol', 'Buffer',
+            'Uint8Array', 'Int32Array', 'Float64Array', 'ArrayBuffer',
+            'WeakMap', 'WeakSet', 'Proxy', 'Reflect',
+            'Request', 'Response', 'Headers', 'URL', 'URLSearchParams',
+            'EventEmitter', 'ReadableStream', 'WritableStream',
+            'Record', 'Partial', 'Required', 'Readonly', 'Pick', 'Omit',
         }
 
         return sorted(

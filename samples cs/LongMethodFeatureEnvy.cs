@@ -2,14 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-/// <summary>
-/// Examples of Long Method and Feature Envy code smells
-/// </summary>
 public class CodeSmellExamples
 {
-    /// <summary>
-    /// LONG METHOD - This method does too much and should be split
-    /// </summary>
     public void ProcessOrder(Order order)
     {
         // Validation
@@ -108,9 +102,6 @@ public class CodeSmellExamples
         logger.Log("Total: $" + total);
     }
 
-    /// <summary>
-    /// FEATURE ENVY - This method is too dependent on the Customer class
-    /// </summary>
     public string GenerateCustomerReport(Customer customer)
     {
         var report = new StringBuilder();
@@ -170,9 +161,6 @@ public class CodeSmellExamples
         return report.ToString();
     }
 
-    /// <summary>
-    /// Another FEATURE ENVY example
-    /// </summary>
     public void UpdateCustomerLoyaltyPoints(Customer customer)
     {
         int currentPoints = customer.LoyaltyPoints;
