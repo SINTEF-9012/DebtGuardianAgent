@@ -130,6 +130,8 @@ class ClassDebtDetector:
             return {
                 'type': 'class',
                 'name': class_name,
+                'code': code,
+                'file_path': class_info.get('file_path', ''),
                 'label': label,
                 'debt_type': self._label_to_debt_type(label),
                 'confidence': confidence,
@@ -141,6 +143,8 @@ class ClassDebtDetector:
             return {
                 'type': 'class',
                 'name': class_name,
+                'code': code,
+                'file_path': class_info.get('file_path', ''),
                 'label': 'UNKNOWN',
                 'debt_type': None,
                 'confidence': 0.0,
@@ -283,6 +287,8 @@ class MethodDebtDetector:
             return {
                 'type': 'method',
                 'name': method_name,
+                'code': code,
+                'file_path': method_info.get('file_path', ''),
                 'label': label,
                 'debt_type': self._label_to_debt_type(label),
                 'confidence': confidence,
@@ -294,6 +300,8 @@ class MethodDebtDetector:
             return {
                 'type': 'method',
                 'name': method_name,
+                'code': code,
+                'file_path': method_info.get('file_path', ''),
                 'label': 'UNKNOWN',
                 'debt_type': None,
                 'confidence': 0.0,
@@ -713,6 +721,8 @@ class RelationshipDebtDetector:
             return {
                 'type': 'class',
                 'name': class_name,
+                'code': code,
+                'file_path': class_info.get('file_path', ''),
                 'label': label,
                 'debt_type': self._label_to_debt_type(label),
                 'confidence': confidence,
@@ -724,6 +734,8 @@ class RelationshipDebtDetector:
             return {
                 'type': 'class',
                 'name': class_name,
+                'code': code,
+                'file_path': class_info.get('file_path', ''),
                 'label': 'UNKNOWN',
                 'debt_type': None,
                 'confidence': 0.0,
@@ -876,6 +888,8 @@ class SecurityDebtDetector:
             return {
                 'type': code_info.get('type', 'class'),
                 'name': name,
+                'code': code,
+                'file_path': code_info.get('file_path', ''),
                 'label': label,
                 'debt_type': self._label_to_debt_type(label),
                 'confidence': confidence,
@@ -888,6 +902,8 @@ class SecurityDebtDetector:
             return {
                 'type': code_info.get('type', 'class'),
                 'name': name,
+                'code': code,
+                'file_path': code_info.get('file_path', ''),
                 'label': 'UNKNOWN',
                 'debt_type': None,
                 'confidence': 0.0,
