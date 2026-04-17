@@ -210,7 +210,11 @@ class DebtGuardian:
         patterns = extension_map.get(language.lower(), extension_map['all'])
 
         return self.coordinator.analyze_repository(repo_path, patterns)
-    
+
+    def analyze_file_list(self, file_paths: List[str]) -> Dict[str, Any]:
+        """Analyze an explicit list of files (e.g. from a CodeScene hotspot export)."""
+        return self.coordinator.analyze_file_list(file_paths)
+
     def _aggregate_results(self, file_results: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Aggregate results"""
         aggregate = {
@@ -363,6 +367,14 @@ def main():
                        help='Output format')
     parser.add_argument('--recursive', action='store_true',
                        help='Recursive directory search')
+    parser.add_argument('--file-list',
+                       help='Text file with one file path per line (limits repo analysis to those files)')
+    parser.add_argument('--codescene-url',
+                       help='CodeScene base URL (e.g. http://localhost:3003 for Docker)')
+    parser.add_argument('--codescene-token',
+                       help='CodeScene API access token')
+    parser.add_argument('--codescene-project',
+                       help='CodeScene project name or numeric ID')
     
     args = parser.parse_args()
     
@@ -389,7 +401,38 @@ def main():
         ext = lang_ext_map.get(args.language.lower()) if args.language else None
         results = guardian.analyze_directory(args.path, file_extension=ext, recursive=args.recursive)
     elif args.type == 'repo':
-        results = guardian.analyze_repository(args.path, language=args.language)
+        # Determine file list: CodeScene API > --file-list > full glob
+        file_list = None
+
+        if args.codescene_url and args.codescene_token:
+            from codescene_client import fetch_hotspot_file_paths
+            proj = args.codescene_project
+            proj_id = int(proj) if proj and proj.isdigit() else None
+            proj_name = proj if proj and not (proj and proj.isdigit()) else None
+            file_list = fetch_hotspot_file_paths(
+                args.codescene_url, args.codescene_token, args.path,
+                project_id=proj_id, project_name=proj_name,
+            )
+            print(f"[CodeScene] Fetched {len(file_list)} hotspot targets")
+
+        elif args.file_list:
+            with open(args.file_list, 'r') as fl:
+                file_list = [
+                    line.strip() for line in fl
+                    if line.strip() and not line.strip().startswith('#')
+                ]
+            # Resolve relative paths against repo root
+            repo = Path(args.path)
+            file_list = [
+                str(repo / p) if not os.path.isabs(p) else p
+                for p in file_list
+            ]
+            print(f"[File List] Loaded {len(file_list)} files from {args.file_list}")
+
+        if file_list:
+            results = guardian.analyze_file_list(file_list)
+        else:
+            results = guardian.analyze_repository(args.path, language=args.language)
     else:
         print(f"Unknown analysis type: {args.type}")
         return

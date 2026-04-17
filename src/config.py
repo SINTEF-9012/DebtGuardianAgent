@@ -23,6 +23,7 @@ LLM_SERVICE     = "ollama"
 OLLAMA_BASE_URL = "http://localhost:11434/v1"
 OLLAMA_API_KEY  = "ollama"
 TEMPERATURE     = 0.1
+NUM_CTX         = 32768                        # context window passed to Ollama (tokens)
 
 # Pre-built LLM config block used by autogen agents
 LLM_CONFIG = {
@@ -32,6 +33,7 @@ LLM_CONFIG = {
             "model":    LLM_MODEL,
             "base_url": OLLAMA_BASE_URL,
             "api_key":  OLLAMA_API_KEY,
+            "extra_body": {"options": {"num_ctx": NUM_CTX}},
         }
     ],
     "temperature": TEMPERATURE,

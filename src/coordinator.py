@@ -504,7 +504,60 @@ class DebtDetectionCoordinator:
         repo_results['summary'] = self._aggregate_repo_summary(repo_results['file_results'])
         
         return repo_results
-    
+
+    def analyze_file_list(self, file_paths: List[str]) -> Dict[str, Any]:
+        """
+        Analyze a specific list of files (e.g. from CodeScene hotspots).
+
+        Args:
+            file_paths: Absolute or relative paths to the files to analyze
+
+        Returns:
+            Repository-style results dict
+        """
+        slicer = ProgramSlicerAgent()
+
+        repo_results = {
+            'source': 'file_list',
+            'total_files': len(file_paths),
+            'analyzed_files': 0,
+            'total_debts': 0,
+            'file_results': [],
+            'summary': {}
+        }
+
+        for i, fp in enumerate(file_paths, 1):
+            fp = Path(fp)
+            if not fp.exists():
+                print(f"[Skip] File not found: {fp}")
+                repo_results['file_results'].append({
+                    'file_path': str(fp), 'error': 'file not found'
+                })
+                continue
+
+            print(f"\n[{i}/{len(file_paths)}] Analyzing {fp.name}...")
+
+            try:
+                sliced_data = slicer.slice_file(str(fp))
+
+                with open(fp, 'r', encoding='utf-8') as f:
+                    source_content = f.read()
+
+                file_result = self.analyze_file(sliced_data, source_content)
+
+                repo_results['file_results'].append(file_result)
+                repo_results['analyzed_files'] += 1
+                repo_results['total_debts'] += file_result.get('filtered_detections', 0)
+
+            except Exception as e:
+                print(f"[Error] Failed to analyze {fp}: {e}")
+                repo_results['file_results'].append({
+                    'file_path': str(fp), 'error': str(e)
+                })
+
+        repo_results['summary'] = self._aggregate_repo_summary(repo_results['file_results'])
+        return repo_results
+
     def _aggregate_repo_summary(self, file_results: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Aggregate summaries from all files"""
         total_summary = {

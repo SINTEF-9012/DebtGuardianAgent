@@ -12,6 +12,8 @@ DebtGuardianAgentic is an AI-powered source code analysis tool that uses a multi
 | **Program Slicer** | AST-based extraction of classes and methods with structural metrics (LOC, complexity, field/method counts). Powered by [source-parser](https://github.com/microsoft/source_parser). |
 | **Class-Level Detector** | Detects Blob and Data Class smells using few-shot LLM prompting |
 | **Method-Level Detector** | Detects Feature Envy and Long Method smells using zero-shot LLM prompting |
+| **Relationship Detector** | Detects Refused Bequest, Shotgun Surgery, and Inappropriate Intimacy smells |
+| **Security Detector** | Detects Hardcoded Secrets and SQL/Command Injection vulnerabilities |
 | **Localization Agent** | Pinpoints exact start/end line numbers of detected issues |
 | **Explanation Agent** | Generates human-readable Markdown explanations of why code is problematic |
 | **Fix Suggestion Agent** | Suggests concrete refactoring steps (disabled by default — expensive) |
@@ -27,6 +29,11 @@ DebtGuardianAgentic is an AI-powered source code analysis tool that uses a multi
 | 2 | **Data Class** | Class | Medium |
 | 3 | **Feature Envy** | Method | Medium |
 | 4 | **Long Method** | Method | High |
+| 5 | **Refused Bequest** | Class | Medium |
+| 6 | **Shotgun Surgery** | Class | High |
+| 7 | **Inappropriate Intimacy** | Class | Medium |
+| 8 | **Hardcoded Secrets** | Class | Critical |
+| 9 | **SQL/Command Injection** | Method | Critical |
 
 ---
 
@@ -53,6 +60,7 @@ DebtGuardianAgent/
 ├── data/                          # Input datasets (MLCQ)
 ├── samples/                       # Sample files with code smells (Java)
 ├── samples cs/                    # Sample files with code smells (C#)
+├── samples js/                    # Sample files with code smells (JavaScript)
 ├── src/
 │   ├── app.py                     # Flask REST API + web UI server
 │   ├── index.html                 # Web UI (served at http://localhost:5000)
@@ -99,7 +107,7 @@ pip install -r requirements.txt
 
 # Start Ollama and pull the default model
 ollama serve &
-ollama pull nemotron-3-nano:latest
+ollama pull qwen2.5-coder-32768:14b
 ```
 
 > The default model is configured in `src/config.py` as `LLM_MODEL`. Change it once there and it propagates everywhere.
@@ -143,9 +151,27 @@ python debt_guardian.py ../samples/ --type dir --language java --recursive
 
 # Analyze a repository
 python debt_guardian.py /path/to/repo --type repo --language all --output ../results/repo.json
+
+# Analyze only files listed in a text file (one path per line, relative to repo root)
+python debt_guardian.py /path/to/repo --type repo --file-list hotspots.txt --output ../results/hotspots.json
+
+# Fetch hotspot targets from a local CodeScene Docker instance and analyze them
+python debt_guardian.py /path/to/repo --type repo \
+  --codescene-url http://localhost:3003 \
+  --codescene-token YOUR_TOKEN \
+  --codescene-project "My Project" \
+  --output ../results/hotspots.json
 ```
 
 **`--language` options:** `java`, `python`, `csharp` / `cs`, `javascript`, `typescript`, `cpp`, `c`, `all`
+
+### Narrowing repo analysis with CodeScene
+
+For large repositories, analyzing every file is slow. You can narrow the scope two ways:
+
+1. **`--file-list hotspots.txt`** — a plain text file with one repo-relative path per line (lines starting with `#` are ignored). Generate it however you like — manually, from CodeScene's UI, or from any other tool.
+
+2. **`--codescene-url` + `--codescene-token`** — fetches prioritised refactoring targets directly from a CodeScene instance (cloud or local Docker). Add `--codescene-project` if the token sees more than one project.
 
 ---
 
@@ -156,7 +182,7 @@ All configuration lives in [src/config.py](src/config.py). Change values there �
 ### Model / LLM settings
 
 ```python
-LLM_MODEL       = "nemotron-3-nano:latest"   # single source of truth
+LLM_MODEL       = "qwen2.5-coder-32768:14b"   # single source of truth
 LLM_SERVICE     = "ollama"
 OLLAMA_BASE_URL = "http://localhost:11434/v1"
 TEMPERATURE     = 0.1
@@ -183,6 +209,20 @@ AGENT_CONFIGS = {
         'enabled':     True,
         'model':       LLM_MODEL,
         'shot':        'zero',    # 'few' | 'zero'
+        'timeout':     300,
+        'temperature': 0.1,
+    },
+    'relationship_detector': {
+        'enabled':     True,
+        'model':       LLM_MODEL,
+        'shot':        'few',     # 'few' | 'zero'
+        'timeout':     300,
+        'temperature': 0.1,
+    },
+    'security_detector': {
+        'enabled':     True,
+        'model':       LLM_MODEL,
+        'shot':        'few',     # 'few' | 'zero'
         'timeout':     300,
         'temperature': 0.1,
     },
@@ -213,11 +253,16 @@ AGENT_CONFIGS = {
 
 ```python
 TD_CATEGORIES = {
-    0: {'name': 'No Smell',     'severity': 'none'},
-    1: {'name': 'Blob',         'severity': 'high'},
-    2: {'name': 'Data Class',   'severity': 'medium'},
-    3: {'name': 'Feature Envy', 'severity': 'medium'},
-    4: {'name': 'Long Method',  'severity': 'high'},
+    0: {'name': 'No Smell',               'severity': 'none'},
+    1: {'name': 'Blob',                   'severity': 'high'},
+    2: {'name': 'Data Class',             'severity': 'medium'},
+    3: {'name': 'Feature Envy',           'severity': 'medium'},
+    4: {'name': 'Long Method',            'severity': 'high'},
+    5: {'name': 'Refused Bequest',        'severity': 'medium'},
+    6: {'name': 'Shotgun Surgery',        'severity': 'high'},
+    7: {'name': 'Inappropriate Intimacy', 'severity': 'medium'},
+    8: {'name': 'Hardcoded Secrets',      'severity': 'critical'},
+    9: {'name': 'SQL/Command Injection',  'severity': 'critical'},
 }
 ```
 
