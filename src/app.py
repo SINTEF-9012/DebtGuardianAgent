@@ -28,7 +28,7 @@ import traceback
 #from debt_guardian import DebtGuardianPipeline
 from pipeline_adapter import DebtGuardianPipeline
 from program_slicer import ProgramSlicerAgent
-from debt_detector import ClassDebtDetector, MethodDebtDetector
+from debt_detector import ClassDebtDetector, MethodDebtDetector, RelationshipDebtDetector, SecurityDebtDetector
 import config
 
 SRC_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -428,7 +428,13 @@ def analyze_single_file():
             # Detect based on granularity
             results = []
 
-            _category_map = {'No Smell': 0, 'Blob': 1, 'Data Class': 2, 'Feature Envy': 3, 'Long Method': 4}
+            _category_map = {
+                'No Smell': 0, 'Blob': 1, 'Data Class': 2,
+                'Feature Envy': 3, 'Long Method': 4,
+                'Refused Bequest': 5, 'Shotgun Surgery': 6,
+                'Inappropriate Intimacy': 7,
+                'Hardcoded Secrets': 8, 'SQL/Command Injection': 9,
+            }
 
             if granularity == 'class' and slices.get('classes'):
                 class_cfg = {**config.AGENT_CONFIGS['class_detector'], 'shot': 'few'}
@@ -437,12 +443,44 @@ def analyze_single_file():
                     result = detector.detect(cls)
                     results.append(result)
 
+                # Relationship detection (Refused Bequest, Shotgun Surgery, Inappropriate Intimacy)
+                rel_cfg = config.AGENT_CONFIGS.get('relationship_detector', {})
+                if rel_cfg.get('enabled', True):
+                    rel_detector = RelationshipDebtDetector(rel_cfg)
+                    for cls in slices['classes']:
+                        result = rel_detector.detect(cls)
+                        results.append(result)
+
+                # Security detection on classes
+                sec_cfg = config.AGENT_CONFIGS.get('security_detector', {})
+                if sec_cfg.get('enabled', True):
+                    from coordinator import DebtDetectionCoordinator
+                    sec_detector = SecurityDebtDetector(sec_cfg)
+                    for cls in slices['classes']:
+                        sec_metrics = DebtDetectionCoordinator._compute_security_metrics(cls.get('code', ''))
+                        enriched = dict(cls)
+                        enriched['security_metrics'] = sec_metrics
+                        result = sec_detector.detect(enriched)
+                        results.append(result)
+
             elif granularity == 'method' and slices.get('methods'):
                 method_cfg = {**config.AGENT_CONFIGS['method_detector'], 'shot': 'zero'}
                 detector = MethodDebtDetector(method_cfg)
                 for method in slices['methods']:
                     result = detector.detect(method)
                     results.append(result)
+
+                # Security detection on methods
+                sec_cfg = config.AGENT_CONFIGS.get('security_detector', {})
+                if sec_cfg.get('enabled', True):
+                    from coordinator import DebtDetectionCoordinator
+                    sec_detector = SecurityDebtDetector(sec_cfg)
+                    for method in slices['methods']:
+                        sec_metrics = DebtDetectionCoordinator._compute_security_metrics(method.get('code', ''))
+                        enriched = dict(method)
+                        enriched['security_metrics'] = sec_metrics
+                        result = sec_detector.detect(enriched)
+                        results.append(result)
 
             # Format response
             response_issues = []

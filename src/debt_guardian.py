@@ -114,7 +114,8 @@ class DebtGuardian:
     
     def analyze_directory(self, directory: str,
                           file_extension: Optional[str] = None,
-                          recursive: bool = True) -> Dict[str, Any]:
+                          recursive: bool = True,
+                          output_path: Optional[str] = None) -> Dict[str, Any]:
         """
         Analyze all files in a directory.
 
@@ -175,6 +176,13 @@ class DebtGuardian:
                     'error': str(e),
                     'status': 'failed'
                 })
+
+            # Incremental save after each file (crash safety)
+            if output_path:
+                results['aggregate_summary'] = self._aggregate_results(results['file_results'])
+                self._save_incremental(results, output_path)
+                done = results['analyzed_files'] + results['failed_files']
+                print(f"[Saved] Partial results ({done}/{len(files)} files) \u2192 {output_path}")
         
         # Generate aggregate summary
         results['aggregate_summary'] = self._aggregate_results(results['file_results'])
@@ -182,7 +190,8 @@ class DebtGuardian:
         return results
     
     def analyze_repository(self, repo_path: str,
-                          language: str = 'all') -> Dict[str, Any]:
+                          language: str = 'all',
+                          output_path: Optional[str] = None) -> Dict[str, Any]:
         """
         Analyze a source code repository.
 
@@ -209,11 +218,12 @@ class DebtGuardian:
 
         patterns = extension_map.get(language.lower(), extension_map['all'])
 
-        return self.coordinator.analyze_repository(repo_path, patterns)
+        return self.coordinator.analyze_repository(repo_path, patterns, incremental_output=output_path)
 
-    def analyze_file_list(self, file_paths: List[str]) -> Dict[str, Any]:
+    def analyze_file_list(self, file_paths: List[str],
+                          output_path: Optional[str] = None) -> Dict[str, Any]:
         """Analyze an explicit list of files (e.g. from a CodeScene hotspot export)."""
-        return self.coordinator.analyze_file_list(file_paths)
+        return self.coordinator.analyze_file_list(file_paths, incremental_output=output_path)
 
     def _aggregate_results(self, file_results: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Aggregate results"""
@@ -352,6 +362,15 @@ class DebtGuardian:
                 f.write(report)
             print(f"[Saved] Report saved to {output_path}")
 
+    @staticmethod
+    def _save_incremental(results: Dict[str, Any], output_path: str):
+        """Write current results to disk for crash safety."""
+        p = Path(output_path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_suffix('.tmp')
+        tmp.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
+        tmp.replace(p)
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -389,7 +408,16 @@ def main():
 
     # Initialize DebtGuardian
     guardian = DebtGuardian()
-    
+
+    # Determine incremental output path for multi-file analysis (crash safety)
+    incremental_path = None
+    if args.type in ('dir', 'repo'):
+        incremental_path = args.output
+        if not incremental_path:
+            ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+            incremental_path = os.path.join(cfg.RESULT_DIR, f'incremental_{ts}.json')
+        print(f"[Incremental] Partial results will be saved to {incremental_path}")
+
     # Perform analysis
     if args.type == 'file':
         results = guardian.analyze_file(args.path, output_format=args.format)
@@ -399,7 +427,7 @@ def main():
             'javascript': '.js', 'typescript': '.ts', 'cpp': '.cpp', 'c': '.c',
         }
         ext = lang_ext_map.get(args.language.lower()) if args.language else None
-        results = guardian.analyze_directory(args.path, file_extension=ext, recursive=args.recursive)
+        results = guardian.analyze_directory(args.path, file_extension=ext, recursive=args.recursive, output_path=incremental_path)
     elif args.type == 'repo':
         # Determine file list: CodeScene API > --file-list > full glob
         file_list = None
@@ -430,9 +458,9 @@ def main():
             print(f"[File List] Loaded {len(file_list)} files from {args.file_list}")
 
         if file_list:
-            results = guardian.analyze_file_list(file_list)
+            results = guardian.analyze_file_list(file_list, output_path=incremental_path)
         else:
-            results = guardian.analyze_repository(args.path, language=args.language)
+            results = guardian.analyze_repository(args.path, language=args.language, output_path=incremental_path)
     else:
         print(f"Unknown analysis type: {args.type}")
         return
@@ -440,6 +468,10 @@ def main():
     # Save or print results
     if args.output:
         guardian.save_results(results, args.output, format=args.format)
+    elif incremental_path:
+        # Multi-file results already saved incrementally; write final version
+        guardian.save_results(results, incremental_path, format='json')
+        print(f"\n[Complete] Final results \u2192 {incremental_path}")
     else:
         if args.format == 'json':
             print(json.dumps(results, indent=2))

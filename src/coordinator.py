@@ -2,6 +2,7 @@
 Coordinator Module
 Orchestrates the multi-agent technical debt detection workflow
 """
+import json
 import re
 import concurrent.futures
 from typing import Dict, Any, List, Optional
@@ -229,25 +230,14 @@ class DebtDetectionCoordinator:
         # Build a code lookup for providing related class context
         class_code_lookup = {c['name']: c.get('code', '') for c in classes}
 
-        # Pre-compute thresholds once (they don't change per class)
-        coupling_threshold = cfg.THRESHOLDS.get('shotgun_surgery_coupled_classes', 5) // 2
-        intimacy_threshold = max(1, cfg.THRESHOLDS.get('inappropriate_intimacy_bidirectional_threshold', 3) // 2)
-
         for class_info in classes:
             metrics = class_info.get('metrics', {})
 
-            has_inheritance = bool(metrics.get('extends'))
-            has_high_coupling = metrics.get('coupled_class_count', 0) >= coupling_threshold
-            has_bidirectional = len(metrics.get('bidirectional_dependencies', [])) >= intimacy_threshold
-
-            if not (has_inheritance or has_high_coupling or has_bidirectional):
-                continue
-
             # Build related code context for the LLM
             related_code = ''
-            if has_inheritance and metrics.get('extends') in class_code_lookup:
+            if metrics.get('extends') and metrics['extends'] in class_code_lookup:
                 related_code = class_code_lookup[metrics['extends']]
-            elif has_bidirectional:
+            elif metrics.get('bidirectional_dependencies'):
                 related_parts = []
                 for dep_name in metrics.get('bidirectional_dependencies', [])[:2]:
                     if dep_name in class_code_lookup:
@@ -294,12 +284,11 @@ class DebtDetectionCoordinator:
         # Analyse classes for hardcoded secrets
         for class_info in classes:
             security_metrics = self._compute_security_metrics(class_info.get('code', ''))
-            if security_metrics.get('has_security_signals'):
-                enriched = dict(class_info)
-                enriched['security_metrics'] = security_metrics
-                result = self.security_detector.detect(enriched)
-                results.append(result)
-                print(f"  [Security] {class_info['name']}: {result.get('debt_type', 'Unknown')}")
+            enriched = dict(class_info)
+            enriched['security_metrics'] = security_metrics
+            result = self.security_detector.detect(enriched)
+            results.append(result)
+            print(f"  [Security] {class_info['name']}: {result.get('debt_type', 'Unknown')}")
 
         # Analyse all methods (standalone + those inside classes) for injection
         all_methods = list(methods)
@@ -308,12 +297,11 @@ class DebtDetectionCoordinator:
 
         for method_info in all_methods:
             security_metrics = self._compute_security_metrics(method_info.get('code', ''))
-            if security_metrics.get('has_security_signals'):
-                enriched = dict(method_info)
-                enriched['security_metrics'] = security_metrics
-                result = self.security_detector.detect(enriched)
-                results.append(result)
-                print(f"  [Security] {method_info['name']}: {result.get('debt_type', 'Unknown')}")
+            enriched = dict(method_info)
+            enriched['security_metrics'] = security_metrics
+            result = self.security_detector.detect(enriched)
+            results.append(result)
+            print(f"  [Security] {method_info['name']}: {result.get('debt_type', 'Unknown')}")
 
         return [r for r in results if r.get('label') != '0']
 
@@ -442,7 +430,8 @@ class DebtDetectionCoordinator:
         return summary
     
     def analyze_repository(self, repo_path: str, 
-                          file_patterns: List[str] = None) -> Dict[str, Any]:
+                          file_patterns: List[str] = None,
+                          incremental_output: Optional[str] = None) -> Dict[str, Any]:
         """
         Analyze an entire repository.
         
@@ -459,10 +448,19 @@ class DebtDetectionCoordinator:
         repo_path = Path(repo_path)
         slicer = ProgramSlicerAgent()
         
-        # Find all matching files
+        # Directories to skip during repository analysis
+        EXCLUDED_DIRS = {
+            'node_modules', '.git', 'vendor', 'dist', 'build', 'bin', 'obj',
+            '__pycache__', '.venv', 'venv', '.tox', '.mypy_cache',
+            'packages', '.nuget', 'TestResults',
+        }
+
+        # Find all matching files, excluding vendor/generated directories
         all_files = []
         for pattern in file_patterns:
-            all_files.extend(repo_path.glob(pattern))
+            for f in repo_path.glob(pattern):
+                if not any(part in EXCLUDED_DIRS for part in f.relative_to(repo_path).parts):
+                    all_files.append(f)
         
         print(f"\n[Repo Analysis] Found {len(all_files)} files to analyze")
         
@@ -499,13 +497,21 @@ class DebtDetectionCoordinator:
                     'file_path': str(file_path),
                     'error': str(e)
                 })
+
+            # Incremental save after each file (crash safety)
+            if incremental_output:
+                repo_results['summary'] = self._aggregate_repo_summary(repo_results['file_results'])
+                self._save_incremental(repo_results, incremental_output)
+                done = repo_results['analyzed_files']
+                print(f"[Saved] Partial results ({done}/{len(all_files)} files) \u2192 {incremental_output}")
         
         # Generate repository-wide summary
         repo_results['summary'] = self._aggregate_repo_summary(repo_results['file_results'])
         
         return repo_results
 
-    def analyze_file_list(self, file_paths: List[str]) -> Dict[str, Any]:
+    def analyze_file_list(self, file_paths: List[str],
+                          incremental_output: Optional[str] = None) -> Dict[str, Any]:
         """
         Analyze a specific list of files (e.g. from CodeScene hotspots).
 
@@ -555,8 +561,24 @@ class DebtDetectionCoordinator:
                     'file_path': str(fp), 'error': str(e)
                 })
 
+            # Incremental save after each file (crash safety)
+            if incremental_output:
+                repo_results['summary'] = self._aggregate_repo_summary(repo_results['file_results'])
+                self._save_incremental(repo_results, incremental_output)
+                done = repo_results['analyzed_files']
+                print(f"[Saved] Partial results ({done}/{len(file_paths)} files) \u2192 {incremental_output}")
+
         repo_results['summary'] = self._aggregate_repo_summary(repo_results['file_results'])
         return repo_results
+
+    @staticmethod
+    def _save_incremental(results: Dict[str, Any], output_path: str):
+        """Write current results to disk for crash safety."""
+        p = Path(output_path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_suffix('.tmp')
+        tmp.write_text(json.dumps(results, indent=2, default=str), encoding='utf-8')
+        tmp.replace(p)  # atomic on POSIX
 
     def _aggregate_repo_summary(self, file_results: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Aggregate summaries from all files"""

@@ -101,7 +101,12 @@ class DebtGuardianPipeline:
                 'Blob': 1,
                 'Data Class': 2,
                 'Feature Envy': 3,
-                'Long Method': 4
+                'Long Method': 4,
+                'Refused Bequest': 5,
+                'Shotgun Surgery': 6,
+                'Inappropriate Intimacy': 7,
+                'Hardcoded Secrets': 8,
+                'SQL/Command Injection': 9,
             }
             
             category_int = category_map.get(debt_type, 0)
@@ -169,7 +174,7 @@ class CoordinatorAdapter:
         """
         # Count by category
         by_category = {}
-        by_severity = {'high': 0, 'medium': 0, 'low': 0}
+        by_severity = {'critical': 0, 'high': 0, 'medium': 0, 'low': 0}
         by_granularity = {'class': 0, 'method': 0}
         
         for result in results:
