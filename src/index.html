@@ -38,9 +38,23 @@
             color: #e2e8f0;
             padding: 0.75rem;
             border-radius: 6px;
-            overflow-x: auto;
+            white-space: pre;
+            word-break: normal;
+            overflow-x: auto;          
             margin-bottom: 0.5rem;
             font-size: 0.8rem;
+        }
+    
+        .code-snippet-scroll {
+            max-height: 480px;        
+            overflow-y: auto;
+            overflow-x: hidden;      
+            border-radius: 0 0 6px 6px;
+            transition: max-height 0.3s ease;
+        }
+        /* When expanded */
+        details[open] .code-snippet-scroll {
+            max-height: 80vh;
         }
         .md-content pre code {
             background: none;
@@ -239,6 +253,7 @@
     </div>
 
     <script>
+        let severityFilter = 'all';
         // Configure marked for safe rendering
         marked.setOptions({ breaks: true, gfm: true });
 
@@ -246,6 +261,13 @@
         function renderMd(text) {
             if (!text) return '';
             return marked.parse(String(text));
+        }
+
+        function renderCodeSnippet(snippet) {
+            if (!snippet) return '';
+            // Strip any leading/trailing blank lines to avoid double fences
+            const clean = snippet.replace(/^\s*\n/, '').replace(/\n\s*$/, '');
+            return renderMd('```\n' + clean + '\n```');
         }
 
         const API_URL = 'http://localhost:5000/api';
@@ -320,6 +342,23 @@
 
             displayFiles();
             document.getElementById('analyzeBtn').disabled = selectedFiles.length === 0;
+        }
+
+        function setSeverityFilter(filter) {
+            severityFilter = filter;
+
+            // Highlight active card
+            document.querySelectorAll('[data-severity-card]').forEach(el => {
+                el.classList.remove('ring-2', 'ring-blue-500');
+            });
+
+            const active = document.querySelector(`[data-filter="${filter}"]`);
+            if (active) active.classList.add('ring-2', 'ring-blue-500');
+
+            // Re-render results
+            if (lastAnalysisData) {
+                displayResults(lastAnalysisData);
+            }
         }
 
         function displayFiles() {
@@ -493,6 +532,10 @@
             lastAnalysisData = data; // store for export
             const enableExplanations = document.getElementById('enableExplanations').checked;
             const enableFixes = document.getElementById('enableFixes').checked;
+            
+            const filteredIssues = severityFilter === 'all'
+                ? data.issues
+                : data.issues.filter(i => (i.severity || '').toLowerCase() === severityFilter);
 
             const severityColor = {
                 'high':   'text-red-600 bg-red-50 border-red-200',
@@ -531,21 +574,24 @@
                 <div class="space-y-6">
                     <!-- Summary Cards -->
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                        <div class="bg-white rounded-xl shadow-lg p-4 border border-slate-200">
+                        <div data-severity-card="all" onclick="setSeverityFilter('all')" class="cursor-pointer bg-white rounded-xl shadow-lg p-4 border border-slate-200 hover:shadow-xl transition">
                             <p class="text-xs text-slate-500 mb-1">Total Issues</p>
                             <p class="text-2xl font-bold text-slate-800">${data.summary.total_issues}</p>
                         </div>
-                        <div class="bg-white rounded-xl shadow-lg p-4 border border-slate-200">
+
+                        <div data-severity-card="high" onclick="setSeverityFilter('high')" class="cursor-pointer bg-white rounded-xl shadow-lg p-4 border border-slate-200 hover:shadow-xl transition">
                             <p class="text-xs text-slate-500 mb-1">High Severity</p>
                             <p class="text-2xl font-bold text-red-600">${data.summary.by_severity.high || 0}</p>
                         </div>
-                        <div class="bg-white rounded-xl shadow-lg p-4 border border-slate-200">
+
+                        <div data-severity-card="medium" onclick="setSeverityFilter('medium')" class="cursor-pointer bg-white rounded-xl shadow-lg p-4 border border-slate-200 hover:shadow-xl transition">
                             <p class="text-xs text-slate-500 mb-1">Medium Severity</p>
                             <p class="text-2xl font-bold text-yellow-600">${data.summary.by_severity.medium || 0}</p>
                         </div>
-                        <div class="bg-white rounded-xl shadow-lg p-4 border border-slate-200">
-                            <p class="text-xs text-slate-500 mb-1">Files Analyzed</p>
-                            <p class="text-2xl font-bold text-slate-700">${data.summary.files_analyzed || 0}</p>
+
+                        <div data-severity-card="low" onclick="setSeverityFilter('low')" class="cursor-pointer bg-white rounded-xl shadow-lg p-4 border border-slate-200 hover:shadow-xl transition">
+                            <p class="text-xs text-slate-500 mb-1">Low Severity</p>
+                            <p class="text-2xl font-bold text-blue-600">${data.summary.by_severity.low || 0}</p>
                         </div>
                     </div>
 
@@ -580,8 +626,9 @@
 
                     <!-- Issues List -->
                     <div class="space-y-4">
-                        <h2 class="text-lg font-semibold text-slate-800">Detected Issues (${data.issues.length})</h2>
-                        ${data.issues.length === 0 ? `
+                        <h2 class="text-lg font-semibold text-slate-800">Detected Issues (${filteredIssues.length})</h2>
+
+                        ${filteredIssues.length === 0 ? `
                             <div class="bg-green-50 rounded-xl p-8 text-center border border-green-200">
                                 <svg class="w-16 h-16 mx-auto mb-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -589,7 +636,7 @@
                                 <h3 class="text-lg font-medium text-green-700 mb-2">No Technical Debt Found!</h3>
                                 <p class="text-sm text-green-600">Your code looks clean. Great job!</p>
                             </div>
-                        ` : data.issues.map(issue => `
+                        ` : filteredIssues.map(issue => `
                             <div class="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
                                 <div class="p-5">
                                     <div class="flex items-start justify-between mb-3">
@@ -633,9 +680,17 @@
                                     ` : ''}
 
                                     ${issue.code_snippet ? `
-                                        <details class="mt-2">
+                                        <details class="mt-2 group">
                                             <summary class="text-xs text-slate-500 cursor-pointer hover:text-slate-700">Show code snippet</summary>
-                                            <div class="mt-2 md-content">${renderMd('\`\`\`\n' + issue.code_snippet + '\n\`\`\`')}</div>
+                                            <div class="mt-2 border border-slate-200 rounded-lg overflow-hidden">
+                                                <div class="bg-slate-100 text-xs text-slate-500 px-3 py-1 flex items-center justify-between">
+                                                    <span>Scroll to view full code</span>
+                                                    <span class="text-slate-400">${issue.code_snippet.split('\n').length} lines</span>
+                                                </div>
+                                                <div class="code-snippet-scroll md-content">
+                                                    ${renderCodeSnippet(issue.code_snippet)}
+                                                </div>
+                                            </div>
                                         </details>
                                     ` : ''}
                                 </div>
@@ -704,9 +759,9 @@
             methodLevel: [
                 "Feature Envy",
                 "Long Method",
+                "Deeply Nested Control Flow",
             ],
             otherSmells: [
-                "Deeply Nested Control Flow",
                 "Collapsible If Statements",
                 "Duplicated String Literals",
                 "Duplicated Code Blocks",
