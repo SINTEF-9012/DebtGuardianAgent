@@ -217,8 +217,8 @@
                                         <ul class="space-y-1 text-xs" id="methodSmellsList"></ul> 
                                     </div> 
                                     <div class="category-section"> 
-                                        <p class="font-medium text-slate-700 mb-1">Other:</p> 
-                                        <ul class="space-y-1 text-xs" id="otherSmellsList"></ul> 
+                                        <p class="font-medium text-slate-700 mb-1">Relationship:</p> 
+                                        <ul class="space-y-1 text-xs" id="relationshipSmellsList"></ul> 
                                     </div> 
                                     <div class="category-section"> 
                                         <p class="font-medium text-slate-700 mb-1">Security:</p> 
@@ -713,11 +713,17 @@
                 "Long Parameter List",
                 "Empty Methods"
             ],
+            relationshipSmells: [
+                "Refused Bequest",
+                "Shotgun Surgery",
+                "Inappropriate Intimacy",
+            ],    
             securitySmells: [
                 "Hardcoded Secrets",
-                "Lack of Input Validation",
-                "Insufficient Error Handling",
-                "CSRF Vulnerabilities"
+                "SQL/Command Injection",
+                //"Lack of Input Validation",
+                //"Insufficient Error Handling",
+                //"CSRF Vulnerabilities"
             ]
         };
 
@@ -725,13 +731,15 @@
         function populateCodeSmells() {
             const classSmellsList = document.getElementById("classSmellsList");
             const methodSmellsList = document.getElementById("methodSmellsList");
-            const otherSmellsList = document.getElementById("otherSmellsList");
+            //const otherSmellsList = document.getElementById("otherSmellsList");
+            const relationshipSmellsList = document.getElementById("relationshipSmellsList");
             const securitySmellsList = document.getElementById("securitySmellsList");
 
             // Clear any existing content
             classSmellsList.innerHTML = "";
             methodSmellsList.innerHTML = "";
-            otherSmellsList.innerHTML = "";
+            //otherSmellsList.innerHTML = "";
+            relationshipSmellsList.innerHTML = "";
             securitySmellsList.innerHTML = "";
 
             // Populate class-level smells
@@ -748,11 +756,20 @@
                 methodSmellsList.appendChild(li);
             });
 
+            /* 
             // Populate other smells
             smells.otherSmells.forEach(smell => {
                 const li = document.createElement("li");
                 li.textContent = `• ${smell}`;
                 otherSmellsList.appendChild(li);
+            });
+            */
+
+            // Populate relationship smells
+            smells.relationshipSmells.forEach(smell => {
+                const li = document.createElement("li");
+                li.textContent = `• ${smell}`;
+                relationshipSmellsList.appendChild(li);
             });
 
             // Populate security smells
