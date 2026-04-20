@@ -12,6 +12,7 @@ import config as cfg
 from debt_detector import (
     ClassDebtDetector,
     MethodDebtDetector,
+    NestingDebtDetector,
     RelationshipDebtDetector,
     SecurityDebtDetector,
     LocalizationAgent,
@@ -42,6 +43,7 @@ class DebtDetectionCoordinator:
         # Initialize agents based on config
         self.class_detector = None
         self.method_detector = None
+        self.nesting_detector     = None
         self.relationship_detector = None
         self.security_detector = None
         self.localizer = None
@@ -74,6 +76,12 @@ class DebtDetectionCoordinator:
             self.method_detector = MethodDebtDetector(method_config)
             print("[Init] Method Debt Detector initialized")
         
+        # Nesting detector
+        nested_config = config.get('nested_detector', {})
+        if nested_config.get('enabled', True):
+            self.nesting_detector = NestingDebtDetector(nested_config)
+            print("[Init] Nesting Debt Detector initialized")
+
         # Relationship detector
         rel_config = config.get('relationship_detector', {})
         if rel_config.get('enabled', True):
@@ -143,6 +151,15 @@ class DebtDetectionCoordinator:
                     method_results = self._detect_method_debts(class_methods)
                     all_detections.extend(method_results)
         
+         # Run nesting detector over all methods (standalone + in-class)
+        if self.nesting_detector:
+            all_methods_for_nesting = list(methods)
+            for class_info in classes:
+                all_methods_for_nesting.extend(class_info.get('methods', []))
+            if all_methods_for_nesting:
+                nesting_results = self._detect_nesting_debts(all_methods_for_nesting)
+                all_detections.extend(nesting_results)
+    
         # Detect relationship-level debts (Refused Bequest, Shotgun Surgery, Inappropriate Intimacy)
         if self.relationship_detector and classes:
             self._resolve_bidirectional_dependencies(classes)
@@ -218,6 +235,29 @@ class DebtDetectionCoordinator:
                 print(f"  [Method] {method_info['name']}: {result.get('debt_type', 'Unknown')}")
         
         # Filter out "No Smell" results
+        return [r for r in results if r.get('label') != '0']
+    
+    def _detect_nesting_debts(self, methods: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Run the NestingDebtDetector over a list of methods.
+        Methods that pass the static pre-filter (depth < threshold) are returned
+        immediately as clean by the detector itself.
+        """
+        results = []
+
+        if self.parallel_detection and len(methods) > 1:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                futures = [
+                    executor.submit(self.nesting_detector.detect, method_info)
+                    for method_info in methods
+                ]
+                results = [f.result() for f in concurrent.futures.as_completed(futures)]
+        else:
+            for method_info in methods:
+                result = self.nesting_detector.detect(method_info)
+                results.append(result)
+                print(f"  [Nesting] {method_info['name']}: {result.get('debt_type', 'Unknown')}")
+
         return [r for r in results if r.get('label') != '0']
     
     def _detect_relationship_debts(self, classes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

@@ -18,7 +18,7 @@ for directory in [DATA_DIR, RESULT_DIR, WORK_DIR, REPO_DIR]:
 # ========================================================================================
 # ★  MODEL CONFIGURATION  —  change here only, propagates everywhere  ★
 # ========================================================================================
-LLM_MODEL       = "qwen2.5-coder-32768:14b"   # single source of truth for the model name
+LLM_MODEL       = "qwen2.5-coder:14b-instruct"   # single source of truth for the model name
 LLM_SERVICE     = "ollama"
 OLLAMA_BASE_URL = "http://localhost:11434/v1"
 OLLAMA_API_KEY  = "ollama"
@@ -72,10 +72,21 @@ AGENT_CONFIGS = {
         'model':       LLM_MODEL,
         'base_url':    OLLAMA_BASE_URL,
         'api_key':     OLLAMA_API_KEY,
-        'shot':        'zero',  # 'few' | 'zero'
+        'shot':        'few',  # 'few' | 'zero'
         'timeout':     300,
         'temperature': TEMPERATURE,
         'enabled':     True,
+    },
+    # ── Deeply Nested Control Flow detector ─────────────────────────────
+    'nested_detector': {                                  
+        'model':       LLM_MODEL,
+        'base_url':    OLLAMA_BASE_URL,
+        'api_key':     OLLAMA_API_KEY,
+        'shot':        'few',   # 'few' | 'zero'
+        'timeout':     300,
+        'temperature': TEMPERATURE,
+        'enabled':     True,
+        'min_nesting_depth': 3,  # pre-filter: only send methods reaching this depth to LLM
     },
     'relationship_detector': {
         'model':       LLM_MODEL,
@@ -149,6 +160,7 @@ TD_CATEGORIES = {
     7: {'name': 'Inappropriate Intimacy',  'granularity': 'class',  'severity': 'medium', 'description': 'Two classes that excessively access each other\'s internal details'},
     8: {'name': 'Hardcoded Secrets',       'granularity': 'class',  'severity': 'critical','description': 'Passwords, API keys, or tokens embedded directly in source code'},
     9: {'name': 'SQL/Command Injection',   'granularity': 'method', 'severity': 'critical','description': 'User input concatenated into SQL queries or OS commands without sanitisation'},
+    10: {'name': 'Deeply Nested Control Flow',  'granularity': 'method', 'severity': 'high',     'description': 'Method with control structures nested 3+ levels deep, severely harming readability and testability'},
 }
 
 # ========================================================================================
@@ -168,6 +180,9 @@ THRESHOLDS = {
     # Security-debt thresholds
     'hardcoded_secret_min_length':                8,
     'injection_string_concat_threshold':          2,
+    # ── Deeply Nested Control Flow threshold ─────────────────────────────
+    'max_nesting_depth': 3,  # methods below this depth are skipped (pre-filter)
+
 }
 
 # ========================================================================================
@@ -191,6 +206,8 @@ from prompts import (
     CLASS_DETECTOR_ZERO_SHOT,
     METHOD_DETECTOR_FEW_SHOT,
     METHOD_DETECTOR_ZERO_SHOT,
+    NESTED_DETECTOR_FEW_SHOT,  
+    NESTED_DETECTOR_ZERO_SHOT, 
     RELATIONSHIP_DETECTOR_FEW_SHOT,
     RELATIONSHIP_DETECTOR_ZERO_SHOT,
     SECURITY_DETECTOR_FEW_SHOT,
@@ -208,6 +225,7 @@ from prompts import (
     TASK_RELATIONSHIP_DETECTION,
     TASK_SECURITY_DETECTION,
     TASK_TD_DETECTION,
+    TASK_NESTED_DETECTION,  
 )
 
 # Legacy aliases — keep existing code working without any changes
@@ -234,3 +252,6 @@ TASK_PROMPT_RELATIONSHIP_DETECTION       = TASK_RELATIONSHIP_DETECTION
 TASK_PROMPT_SECURITY_DETECTION           = TASK_SECURITY_DETECTION
 SYS_MSG_CLASS_LEVEL_FEW                  = CLASS_DETECTOR_FEW_SHOT
 SYS_MSG_METHOD_LEVEL_FEW                 = METHOD_DETECTOR_FEW_SHOT
+SYS_MSG_NESTED_DETECTOR_FEW_SHOT         = NESTED_DETECTOR_FEW_SHOT  
+SYS_MSG_NESTED_DETECTOR_ZERO_SHOT        = NESTED_DETECTOR_ZERO_SHOT 
+TASK_PROMPT_NESTED_DETECTION             = TASK_NESTED_DETECTION 

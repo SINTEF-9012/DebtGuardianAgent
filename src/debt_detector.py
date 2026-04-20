@@ -40,7 +40,67 @@ class DebtType(Enum):
     INAPPROPRIATE_INTIMACY = 7
     HARDCODED_SECRETS = 8
     SQL_COMMAND_INJECTION = 9
+    DEEPLY_NESTED_CONTROL_FLOW = 10
 
+def _compute_max_nesting_depth(code: str) -> int:
+    """
+    Compute the maximum control-flow nesting depth of a method body.
+
+    Counts opening braces that follow a control-flow keyword
+    (if / else / for / while / do / switch / try / catch / finally).
+    This is a lightweight heuristic that works well for brace-delimited
+    languages (Java, C#, C++, JS/TS).  Python indentation is handled by
+    counting leading spaces on lines that start a control block.
+
+    Returns the maximum depth reached inside the method body.
+    """
+    CONTROL_KEYWORDS = re.compile(
+        r'\b(if|else\s+if|else|for|while|do|switch|try|catch|finally)\b'
+    )
+
+    depth     = 0
+    max_depth = 0
+
+    lines = code.splitlines()
+
+    # Detect Python-style (no braces) vs brace-delimited
+    has_braces = '{' in code
+
+    if has_braces:
+        # ── Brace-delimited languages ────────────────────────────────────────
+        # Track whether each '{' was preceded by a control keyword on the same
+        # logical line so we only count control-flow braces, not all scopes.
+        pending_control = False
+        for line in lines:
+            stripped = line.strip()
+            if CONTROL_KEYWORDS.search(stripped):
+                pending_control = True
+            for ch in line:
+                if ch == '{':
+                    if pending_control:
+                        depth += 1
+                        max_depth = max(max_depth, depth)
+                        pending_control = False
+                elif ch == '}':
+                    depth = max(0, depth - 1)
+    else:
+        # ── Python indentation heuristic ─────────────────────────────────────
+        PYTHON_CONTROL = re.compile(
+            r'^\s*(if |elif |else:|for |while |try:|except|finally:)'
+        )
+        indent_stack: List[int] = []
+        for line in lines:
+            if not line.strip():
+                continue
+            indent = len(line) - len(line.lstrip())
+            if PYTHON_CONTROL.match(line):
+                # Pop stack to current indent
+                while indent_stack and indent_stack[-1] >= indent:
+                    indent_stack.pop()
+                indent_stack.append(indent)
+                max_depth = max(max_depth, len(indent_stack))
+
+    return max_depth
 
 class ClassDebtDetector:
     """
@@ -948,4 +1008,170 @@ class SecurityDebtDetector:
                 return 0.75
             else:
                 return 0.6
+        return 0.5
+    
+
+# ═════════════════════════════════════════════════════════════════════════════
+# NEW: NestingDebtDetector
+# ═════════════════════════════════════════════════════════════════════════════
+class NestingDebtDetector:
+    """
+    Specialized agent for detecting Deeply Nested Control Flow (label 10).
+
+    Uses a lightweight pre-filter (_compute_max_nesting_depth) to skip
+    methods that cannot possibly reach the threshold, saving LLM calls.
+    Methods that do pass the threshold are sent to the LLM for confirmation,
+    which handles language-specific edge cases (e.g. Python comprehensions,
+    ternary chains) that the regex heuristic might mis-count.
+    """
+
+    def __init__(self, agent_config: Dict[str, Any]):
+        self.config      = agent_config
+        self.model       = agent_config.get('model', config.LLM_MODEL)
+        self.base_url    = agent_config.get('base_url', 'http://localhost:11434/v1')
+        self.api_key     = agent_config.get('api_key', 'ollama')
+        self.shot_type   = agent_config.get('shot', 'few')
+        self.temperature = agent_config.get('temperature', 0.1)
+        self.timeout     = agent_config.get('timeout', 300)
+        # Pre-filter threshold — methods below this depth are immediately
+        # returned as clean without calling the LLM.
+        self.min_nesting_depth = agent_config.get(
+            'min_nesting_depth',
+            config.THRESHOLDS.get('max_nesting_depth', 3)
+        )
+
+        self.llm_config = {
+            "config_list": [{
+                "model":      self.model,
+                "base_url":   self.base_url,
+                "api_key":    self.api_key,
+                "extra_body": {"options": {"num_ctx": config.NUM_CTX}},
+            }],
+            "temperature": self.temperature,
+            "timeout":     self.timeout,
+            "cache_seed":  None,
+        }
+        self._agent = None
+
+    def _get_agent(self):
+        if self._agent is None:
+            sys_prompt = (
+                config.SYS_MSG_NESTED_DETECTOR_FEW_SHOT
+                if self.shot_type == 'few'
+                else config.SYS_MSG_NESTED_DETECTOR_ZERO_SHOT
+            )
+            self._agent = create_agent(
+                agent_type="assistant",
+                name="nesting_debt_detector",
+                llm_config=self.llm_config,
+                sys_prompt=sys_prompt,
+                description="Detects Deeply Nested Control Flow (label 10)"
+            )
+        return self._agent
+
+    def detect(self, method_info: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Detect Deeply Nested Control Flow in a single method.
+
+        Args:
+            method_info: Dictionary with 'code', 'name', 'metrics', etc.
+
+        Returns:
+            Detection result dict consistent with other detectors.
+        """
+        code        = method_info.get('code', '')
+        method_name = method_info.get('name', 'Unknown')
+        metrics     = method_info.get('metrics', {})
+
+        # ── Pre-filter: compute nesting depth without calling the LLM ────────
+        max_depth = _compute_max_nesting_depth(code)
+        # Store it in metrics so downstream agents (explanation, localization)
+        # have access to it without re-computing.
+        metrics = dict(metrics)
+        metrics['max_nesting_depth'] = max_depth
+
+        if max_depth < self.min_nesting_depth:
+            # Definitively clean — no LLM call needed.
+            return {
+                'type':        'method',
+                'name':        method_name,
+                'code':        code,
+                'file_path':   method_info.get('file_path', ''),
+                'label':       '0',
+                'debt_type':   'No Smell',
+                'confidence':  0.95,   # very high: structural check, not probabilistic
+                'metrics':     metrics,
+                'raw_response': 'pre-filtered (depth below threshold)',
+                'granularity': 'method',
+            }
+
+        # ── LLM confirmation ─────────────────────────────────────────────────
+        lang         = _language_for_fence(method_info.get('file_path', ''))
+        task_prompt  = config.TASK_PROMPT_NESTED_DETECTION
+        message      = f"{task_prompt}```{lang}\n{code}\n```"
+
+        agent    = self._get_agent()
+        response = agent.generate_reply(messages=[{"content": message, "role": "user"}])
+
+        if response:
+            label      = self._normalize_label(response)
+            confidence = self._calculate_confidence(label, metrics)
+
+            return {
+                'type':        'method',
+                'name':        method_name,
+                'code':        code,
+                'file_path':   method_info.get('file_path', ''),
+                'label':       label,
+                'debt_type':   self._label_to_debt_type(label),
+                'confidence':  confidence,
+                'metrics':     metrics,
+                'raw_response': response,
+                'granularity': 'method',
+            }
+        else:
+            return {
+                'type':      'method',
+                'name':      method_name,
+                'code':      code,
+                'file_path': method_info.get('file_path', ''),
+                'label':     'UNKNOWN',
+                'debt_type': None,
+                'confidence': 0.0,
+                'error':     'No response from agent',
+            }
+
+    def _normalize_label(self, text: str) -> str:
+        """Normalize agent response: expect '10' or '0'."""
+        # Check for '10' before checking for lone '1' or '0' to avoid
+        # mis-parsing "10" as "1" followed by "0".
+        if '10' in text:
+            return '10'
+        if '0' in text:
+            return '0'
+        return 'UNKNOWN'
+
+    def _label_to_debt_type(self, label: str) -> Optional[str]:
+        mapping = {
+            '0':  'No Smell',
+            '10': 'Deeply Nested Control Flow',
+        }
+        return mapping.get(label)
+
+    def _calculate_confidence(self, label: str, metrics: Dict[str, Any]) -> float:
+        """
+        deeper nesting = higher certainty
+        """
+        if label == '0':
+            return 0.9
+        elif label == '10':
+            depth = metrics.get('max_nesting_depth', 0)
+            if depth >= 6:
+                return 0.95
+            elif depth >= 5:
+                return 0.9
+            elif depth >= 4:
+                return 0.8
+            else:          # depth == 3, boundary case
+                return 0.7
         return 0.5

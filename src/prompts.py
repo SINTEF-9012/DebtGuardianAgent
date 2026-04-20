@@ -23,6 +23,10 @@ CLASS_DETECTOR_ZERO_SHOT = _load('class_detector_zero_shot.md')
 METHOD_DETECTOR_FEW_SHOT  = _load('method_detector_few_shot.md')
 METHOD_DETECTOR_ZERO_SHOT = _load('method_detector_zero_shot.md')
 
+# ── Deeply Nested Control Flow detector ─────────────────────────────────
+NESTED_DETECTOR_FEW_SHOT  = _load('method_detector_nested_few_shot.md')   
+NESTED_DETECTOR_ZERO_SHOT = _load('method_detector_nested_zero_shot.md') 
+
 # ── Relationship-level detection ─────────────────────────────────────────────
 RELATIONSHIP_DETECTOR_FEW_SHOT  = _load('relationship_detector_few_shot.md')
 RELATIONSHIP_DETECTOR_ZERO_SHOT = _load('relationship_detector_zero_shot.md')
@@ -49,3 +53,5 @@ TASK_METHOD_DETECTION       = "Analyze the following method and respond with onl
 TASK_RELATIONSHIP_DETECTION = "Analyze the following class for relationship-level code smells and respond with only a single digit (0, 5, 6, or 7) representing the code smell category:\n\n"
 TASK_SECURITY_DETECTION     = "Analyze the following code for security-related technical debt and respond with only a single digit (0, 8, or 9) representing the category:\n\n"
 TASK_TD_DETECTION           = "Look at the following code snippet and respond with only a single digit (0-9) that represents the most appropriate category:\n"
+TASK_NESTED_DETECTION       = "Analyze the following method and return 0 (no smell) or 10 (Deeply Nested Control Flow):\n"
+

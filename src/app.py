@@ -28,7 +28,7 @@ import traceback
 #from debt_guardian import DebtGuardianPipeline
 from pipeline_adapter import DebtGuardianPipeline
 from program_slicer import ProgramSlicerAgent
-from debt_detector import ClassDebtDetector, MethodDebtDetector, RelationshipDebtDetector, SecurityDebtDetector
+from debt_detector import ClassDebtDetector, MethodDebtDetector, NestingDebtDetector, RelationshipDebtDetector, SecurityDebtDetector
 import config
 
 SRC_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -374,7 +374,8 @@ def analyze_code():
                 
                 # Add code snippet (truncated)
                 if 'code_snippet' in result:
-                    issue['code_snippet'] = result['code_snippet'][:500]
+                    #issue['code_snippet'] = result['code_snippet'][:500]
+                    issue['code_snippet'] = result['code_snippet']
                 
                 response['issues'].append(issue)
         
@@ -434,6 +435,7 @@ def analyze_single_file():
                 'Refused Bequest': 5, 'Shotgun Surgery': 6,
                 'Inappropriate Intimacy': 7,
                 'Hardcoded Secrets': 8, 'SQL/Command Injection': 9,
+                'Deeply Nested Control Flow': 10,
             }
 
             if granularity == 'class' and slices.get('classes'):
@@ -464,12 +466,23 @@ def analyze_single_file():
                         results.append(result)
 
             elif granularity == 'method' and slices.get('methods'):
+                methods = slices['methods']
+
+                # Standard method-level detection
                 method_cfg = {**config.AGENT_CONFIGS['method_detector'], 'shot': 'zero'}
                 detector = MethodDebtDetector(method_cfg)
                 for method in slices['methods']:
                     result = detector.detect(method)
                     results.append(result)
 
+                # Nesting detection
+                nested_cfg = config.AGENT_CONFIGS.get('nested_detector', {})
+                if nested_cfg.get('enabled', True):
+                    nested_detector = NestingDebtDetector(nested_cfg)
+                    for method in methods:
+                        result = nested_detector.detect(method)
+                        results.append(result)
+                        
                 # Security detection on methods
                 sec_cfg = config.AGENT_CONFIGS.get('security_detector', {})
                 if sec_cfg.get('enabled', True):

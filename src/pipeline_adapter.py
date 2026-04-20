@@ -107,6 +107,7 @@ class DebtGuardianPipeline:
                 'Inappropriate Intimacy': 7,
                 'Hardcoded Secrets': 8,
                 'SQL/Command Injection': 9,
+                'Deeply Nested Control Flow': 10,
             }
             
             category_int = category_map.get(debt_type, 0)
