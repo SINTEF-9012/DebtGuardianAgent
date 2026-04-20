@@ -18,7 +18,7 @@ for directory in [DATA_DIR, RESULT_DIR, WORK_DIR, REPO_DIR]:
 # ========================================================================================
 # ★  MODEL CONFIGURATION  —  change here only, propagates everywhere  ★
 # ========================================================================================
-LLM_MODEL       = "qwen2.5-coder:14b-instruct"   # single source of truth for the model name
+LLM_MODEL       = "qwen2.5-coder-32768:14b"   # single source of truth for the model name
 LLM_SERVICE     = "ollama"
 OLLAMA_BASE_URL = "http://localhost:11434/v1"
 OLLAMA_API_KEY  = "ollama"
