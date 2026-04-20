@@ -1089,7 +1089,8 @@ class NestingDebtDetector:
         # have access to it without re-computing.
         metrics = dict(metrics)
         metrics['max_nesting_depth'] = max_depth
-
+        
+        """
         if max_depth < self.min_nesting_depth:
             # Definitively clean — no LLM call needed.
             return {
@@ -1104,7 +1105,7 @@ class NestingDebtDetector:
                 'raw_response': 'pre-filtered (depth below threshold)',
                 'granularity': 'method',
             }
-
+        """
         # ── LLM confirmation ─────────────────────────────────────────────────
         lang         = _language_for_fence(method_info.get('file_path', ''))
         task_prompt  = config.TASK_PROMPT_NESTED_DETECTION
