@@ -46,7 +46,7 @@ class DebtGuardianPipeline:
         print(f"[Pipeline] Analyzing repository: {self.repo_path}")
         
         # Find all supported files
-        supported_extensions = {'.java', '.cpp', '.cs', '.py', '.js'}
+        supported_extensions = {'.java', '.cpp', '.cs', '.py', '.js', '.ts'}
         files_to_analyze = []
         
         for root, dirs, files in os.walk(self.repo_path):
