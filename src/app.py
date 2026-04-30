@@ -39,7 +39,7 @@ CORS(app)  # Enable CORS for browser-based clients
 # Configuration
 UPLOAD_FOLDER = tempfile.mkdtemp()
 ALLOWED_EXTENSIONS = {'java', 'cpp', 'cs', 'py', 'js', 'ts'}
-MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB for folder uploads
+MAX_FILE_SIZE = 700 * 1024 * 1024  # 700MB for folder uploads
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
